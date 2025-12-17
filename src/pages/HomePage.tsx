@@ -5,7 +5,6 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import { ReleaseNotesModal, RELEASE_NOTES_KEY } from '../components/ReleaseNotesModal';
 import { GiftIcon } from '../icons/GiftIcon';
-import { supabase } from '../services/supabase';
 
 
 const HomePage = () => {
@@ -21,7 +20,7 @@ const HomePage = () => {
         if (storedOrganizer) {
             setLoggedInOrganizer(storedOrganizer);
         }
-
+        
         const hasSeenNotes = localStorage.getItem(RELEASE_NOTES_KEY);
         if (!hasSeenNotes) {
             setShowReleaseNotes(true);
@@ -33,66 +32,29 @@ const HomePage = () => {
         localStorage.setItem(RELEASE_NOTES_KEY, 'true');
     };
 
-    // const handleOrganizerLogin = async (e: React.FormEvent) => {
-    //     e.preventDefault();
-    //     if (!organizerUsername.trim()) return;
-    //     setIsVerifying(true);
-    //     setError('');
-    //     try {
-    //         const organizerRef = db.collection('organizers').doc(organizerUsername.trim());
-    //         const doc = await organizerRef.get();
-    //         if (doc.exists) {
-    //             const username = organizerUsername.trim();
-    //             setLoggedInOrganizer(username);
-    //             sessionStorage.setItem('quiz-organizer', username);
-    //             setShowOrganizerLogin(false);
-    //             setOrganizerUsername('');
-    //         } else {
-    //             setError('Invalid organizer username.');
-    //         }
-    //     } catch (err) {
-    //         console.error("Organizer verification failed:", err);
-    //         setError('Error verifying. Please try again.');
-    //     }
-    //     setIsVerifying(false);
-    // };
-
     const handleOrganizerLogin = async (e: React.FormEvent) => {
-  e.preventDefault();
-
-  const username = organizerUsername.trim();
-  if (!username) return;
-
-  setIsVerifying(true);
-  setError('');
-
-  try {
-    const { data, error } = await supabase
-      .from('organizers_master')
-      .select('organizer_id')
-      .eq('organizer_id', username)
-      .maybeSingle(); // ✅ FIX HERE
-
-    if (error || !data) {
-      setError('Invalid organizer username.');
-      return;
-    }
-
-    // ✅ SUCCESS
-    setLoggedInOrganizer(username);
-    sessionStorage.setItem('quiz-organizer', username);
-    setShowOrganizerLogin(false);
-    setOrganizerUsername('');
-
-  } catch (err) {
-    console.error('Organizer verification failed:', err);
-    setError('Error verifying. Please try again.');
-  } finally {
-    setIsVerifying(false);
-  }
-};
-
-
+        e.preventDefault();
+        if (!organizerUsername.trim()) return;
+        setIsVerifying(true);
+        setError('');
+        try {
+            const organizerRef = db.collection('organizers').doc(organizerUsername.trim());
+            const doc = await organizerRef.get();
+            if (doc.exists) {
+                const username = organizerUsername.trim();
+                setLoggedInOrganizer(username);
+                sessionStorage.setItem('quiz-organizer', username);
+                setShowOrganizerLogin(false);
+                setOrganizerUsername('');
+            } else {
+                setError('Invalid organizer username.');
+            }
+        } catch (err) {
+            console.error("Organizer verification failed:", err);
+            setError('Error verifying. Please try again.');
+        }
+        setIsVerifying(false);
+    };
 
     const handleLogout = () => {
         setLoggedInOrganizer(null);
@@ -102,7 +64,7 @@ const HomePage = () => {
     return (
         <div className="flex-grow flex flex-col items-center justify-center p-4 animate-fade-in">
             {showReleaseNotes && <ReleaseNotesModal onClose={handleCloseReleaseNotes} />}
-
+            
             <div className="flex flex-row items-center justify-center gap-6 sm:gap-8 mb-12">
                 {/* Column 1: Logo */}
                 <div className="w-24 h-24 sm:w-28 sm:h-28 bg-gl-orange-500 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
@@ -120,7 +82,7 @@ const HomePage = () => {
 
             <div className="w-full max-w-md animate-slide-in-up z-10">
                 <Card className="transition-all duration-300 flex flex-col items-center text-center">
-
+                    
                     {!loggedInOrganizer && !showOrganizerLogin && (
                         <div className="w-full animate-fade-in">
                             <h2 className="text-3xl font-bold text-slate-800 mb-6">Ready to Play?</h2>
@@ -133,19 +95,19 @@ const HomePage = () => {
                             </div>
                         </div>
                     )}
-
+                    
                     {loggedInOrganizer ? (
-                        <div className="w-full">
+                         <div className="w-full">
                             <p className="text-slate-700">Welcome, <span className="font-bold text-gl-orange-600">{loggedInOrganizer}</span>!</p>
                             <Link to="/create" className="mt-4 inline-block bg-gl-orange-600 hover:bg-gl-orange-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105">
                                 Create Quiz
                             </Link>
                             <button onClick={handleLogout} className="block mx-auto mt-3 text-sm text-slate-500 hover:text-slate-800">Log out</button>
-                        </div>
+                         </div>
                     ) : (
                         showOrganizerLogin ? (
                             <form onSubmit={handleOrganizerLogin} className="w-full space-y-4 animate-fade-in">
-                                <h3 className="text-xl font-bold text-slate-800">Organizer Login</h3>
+                                 <h3 className="text-xl font-bold text-slate-800">Organizer Login</h3>
                                 <input
                                     type="text"
                                     value={organizerUsername}
@@ -171,9 +133,9 @@ const HomePage = () => {
                     )}
                 </Card>
             </div>
-
+            
             <div className="absolute bottom-4 right-4 z-10">
-                <button onClick={() => setShowReleaseNotes(true)} className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm p-3 rounded-full shadow-lg text-slate-600 hover:text-gl-orange-500 hover:shadow-xl transition-all duration-300 transform hover:scale-110" aria-label="Show release notes">
+                 <button onClick={() => setShowReleaseNotes(true)} className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm p-3 rounded-full shadow-lg text-slate-600 hover:text-gl-orange-500 hover:shadow-xl transition-all duration-300 transform hover:scale-110" aria-label="Show release notes">
                     <GiftIcon className="w-6 h-6" />
                 </button>
             </div>
