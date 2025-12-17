@@ -5,11 +5,19 @@ import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import type { Question } from './types';
 import { QuestionType } from "./types";
 
-if (!process.env.API_KEY) {
-    console.error("A Google Gemini API key is required. Please set the API_KEY environment variable.");
+// if (!process.env.API_KEY) {
+//     console.error("A Google Gemini API key is required. Please set the API_KEY environment variable.");
+// }
+
+// const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+if (!apiKey) {
+  console.error("A Google Gemini API key is required. Please set VITE_GEMINI_API_KEY.");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+const ai = new GoogleGenAI({ apiKey });
+
 
 // Fix: Define a type for the questions returned by the AI. This mirrors the schema.
 type AiGeneratedQuestion = Omit<Question, 'id' | 'type' | 'matchPairs' | 'correctAnswers' | 'organizerName' | 'creationTime'>;
