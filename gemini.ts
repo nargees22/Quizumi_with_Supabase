@@ -1,20 +1,12 @@
-
-
-
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import type { Question } from './types';
 import { QuestionType } from "./types";
 
-if (!process.env.API_KEY) {
-    console.error("A Google Gemini API key is required. Please set the API_KEY environment variable.");
-}
-
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
-// Fix: Define a type for the questions returned by the AI. This mirrors the schema.
+// Define a type for the questions returned by the AI.
 type AiGeneratedQuestion = Omit<Question, 'id' | 'type' | 'matchPairs' | 'correctAnswers' | 'organizerName' | 'creationTime'>;
 
-// Fix: Define a type for the overall JSON response structure.
 interface AiResponse {
     questions: AiGeneratedQuestion[];
 }
@@ -46,7 +38,6 @@ const schema = {
     required: ['questions']
 };
 
-
 export async function generateQuestions(topic: string, skill: string, count: number): Promise<Omit<Question, 'id'>[]> {
     try {
         const prompt = `Generate ${count} unique, high-quality multiple-choice quiz questions for the topic "${topic}" at a "${skill}" skill level.
@@ -58,7 +49,7 @@ Assign a time limit of 30 seconds for each question.
 Ensure the questions are distinct and cover different aspects of the topic.`;
         
         const response: GenerateContentResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3-flash-preview',
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -66,12 +57,7 @@ Ensure the questions are distinct and cover different aspects of the topic.`;
             }
         });
 
-        let rawText = response.text.trim();
-        if (rawText.startsWith("```json")) {
-          rawText = rawText.slice(7, -3).trim();
-        }
-
-        // FIX: Type the parsed JSON to avoid 'unknown' type issues in strict environments.
+        const rawText = response.text || "{}";
         const jsonResult = JSON.parse(rawText) as unknown;
         
         let questionsList: AiGeneratedQuestion[] = [];
@@ -85,7 +71,6 @@ Ensure the questions are distinct and cover different aspects of the topic.`;
         }
         
         if (questionsList.length > 0) {
-            // Basic validation to ensure the AI followed instructions
             const validatedQuestions = (questionsList as AiGeneratedQuestion[]).filter((q) => 
                 q.text && Array.isArray(q.options) && q.options.length === 4 &&
                 typeof q.correctAnswerIndex === 'number' && q.correctAnswerIndex >= 0 && q.correctAnswerIndex < 4

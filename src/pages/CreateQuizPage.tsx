@@ -1,8 +1,13 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { db } from '../../firebase';
-import firebase from '../../firebase';
+// import { db } from '../../firebase';
+// import firebase from '../../firebase';
+import { supabase } from "../services/supabase";
+
+
+
+
 import { generateQuestions } from '../../gemini';
 
 import type { Quiz, Player, Question, PlayerAnswer, QuizConfig, MatchPair } from '../../types';
@@ -22,6 +27,9 @@ import { UpArrowIcon } from '../icons/UpArrowIcon';
 import { DownArrowIcon } from '../icons/DownArrowIcon';
 import { SearchIcon } from '../icons/SearchIcon';
 import { UsersIcon } from '../icons/UsersIcon';
+const notAvailable = () => {
+    alert("This feature is temporarily disabled during Supabase migration.");
+};
 
 
 const countWords = (str: string) => str ? str.trim().split(/\s+/).filter(Boolean).length : 0;
@@ -32,14 +40,21 @@ const CreateQuizPage = () => {
 
     const [title, setTitle] = useState('');
     const [dynamicTitle, setDynamicTitle] = useState('');
-    const [questions, setQuestions] = useState<Question[]>([]);
-    const [view, setView] = useState<'past' | 'reports' | 'library' | 'custom' | 'ai'>('past');
+    const [questions, setQuestions] = useState<Array<Question>>([]);
+
+    // const [view, setView] = useState<'past' | 'reports' | 'library' | 'custom' | 'ai'>('past');
+    const [view, setView] = useState<('past' | 'reports' | 'library' | 'custom' | 'ai')>('past');
+
+
     const [isCreating, setIsCreating] = useState(false);
-    
+
     // Library State
     const [libraryQuestions, setLibraryQuestions] = useState<Question[]>([]);
     const [isLoadingLibrary, setIsLoadingLibrary] = useState(true);
-    const [libraryView, setLibraryView] = useState<'all' | 'mine'>('all');
+
+    const [libraryView, setLibraryView] = useState<('all' | 'mine')>('all');
+
+
     const [technologies, setTechnologies] = useState<string[]>([]);
     const [masterSkills, setMasterSkills] = useState<string[]>([]);
     const [skillsForFilter, setSkillsForFilter] = useState<string[]>([]);
@@ -68,7 +83,7 @@ const CreateQuizPage = () => {
         clanNames: { [Clan.TITANS]: 'Titans', [Clan.DEFENDERS]: 'Defenders' },
         clanAssignment: 'autoBalance',
     });
-    
+
     // LMS Integration State
     const [agendaInfo, setAgendaInfo] = useState<{ agendaId?: string; agendaName?: string; eventId?: string }>({});
 
@@ -129,12 +144,12 @@ const CreateQuizPage = () => {
         const agendaId = queryParams.get('agendaId');
         const agendaName = queryParams.get('agendaName');
         const eventId = queryParams.get('eventId');
-        
+
         const newAgendaInfo: { agendaId?: string; agendaName?: string; eventId?: string } = {};
         if (agendaId) newAgendaInfo.agendaId = agendaId;
         if (agendaName) newAgendaInfo.agendaName = agendaName;
         if (eventId) newAgendaInfo.eventId = eventId;
-        
+
         if (Object.keys(newAgendaInfo).length > 0) {
             setAgendaInfo(newAgendaInfo);
         }
@@ -142,63 +157,105 @@ const CreateQuizPage = () => {
         const fetchLibraryData = async () => {
             setIsLoadingLibrary(true);
             try {
-                // Fetch questions from questionBank
-                const snapshot = await db.collection('questionBank').get();
-                const questionsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Question));
-                setLibraryQuestions(questionsData);
-                
-                if (questionsData.length > 0) {
+                const { data, error } = await supabase
+                    .from('question_bank_structured')
+                    .select('*');
+
+                if (error) {
+                    console.error('Error fetching question library:', error);
+                    setIsLoadingLibrary(false);
+                    return;
+                }
+
+                const mappedQuestions: Question[] = data.map((row: any) => ({
+                    //id: row.id,
+                    id: row.pk_id.toString(),
+                    text: row.question_text,
+                    timeLimit: row.time_limit,
+                    technology: row.technology,
+                    skill: row.skill,
+                    type: row.type,
+                    organizerName: row.organizer_name,
+                    options: [
+                        row.option_1,
+                        row.option_2,
+                        row.option_3,
+                        row.option_4,
+                    ].filter(Boolean),
+                    correctAnswerIndex: row.correct_answer_index,
+                }));
+
+                setLibraryQuestions(mappedQuestions);
+
+
+                if (data.length > 0) {
                     const techMap = new Map<string, string>();
                     const skillMap = new Map<string, string>();
-                    questionsData.forEach(q => {
-                        if (q.technology) {
-                            const trimmedTech = q.technology.trim();
-                            if(trimmedTech) {
-                                const key = trimmedTech.toLowerCase();
-                                if (!techMap.has(key)) {
-                                    techMap.set(key, trimmedTech);
-                                }
-                            }
+
+                    data.forEach(q => {
+                        if (q.technology?.trim()) {
+                            techMap.set(q.technology.toLowerCase(), q.technology.trim());
                         }
-                        if (q.skill) {
-                            const trimmedSkill = q.skill.trim();
-                            if(trimmedSkill) {
-                                const key = trimmedSkill.toLowerCase();
-                                if (!skillMap.has(key)) {
-                                    skillMap.set(key, trimmedSkill);
-                                }
-                            }
+                        if (q.skill?.trim()) {
+                            skillMap.set(q.skill.toLowerCase(), q.skill.trim());
                         }
                     });
-                    setTechnologies(Array.from(techMap.values()).sort((a, b) => a.localeCompare(b)));
-                    const sortedSkills = Array.from(skillMap.values()).sort((a, b) => a.localeCompare(b));
+
+                    setTechnologies(Array.from(techMap.values()).sort());
+                    const sortedSkills = Array.from(skillMap.values()).sort();
                     setMasterSkills(sortedSkills);
                     setSkillsForFilter(sortedSkills);
                 }
+
             } catch (error) {
                 console.error("Error fetching question library:", error);
             }
             setIsLoadingLibrary(false);
         };
 
-        const fetchAiUsage = async () => {
-            setIsCheckingUsage(true);
-            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-            const usageRef = db.collection('aiUsage').doc(organizerName);
-            try {
-                const doc = await usageRef.get();
-                if (doc.exists) {
-                    const data = doc.data();
-                    setAiUsage(data?.[today] || 0);
-                } else {
-                    setAiUsage(0);
-                }
-            } catch (error) {
-                console.error("Error fetching AI usage:", error);
-            }
-            setIsCheckingUsage(false);
-        };
-        
+        // const fetchAiUsage = async () => {
+        //     setIsCheckingUsage(true);
+        //     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        //     const usageRef = db.collection('aiUsage').doc(organizerName);
+        //     try {
+        //         const doc = await usageRef.get();
+        //         if (doc.exists) {
+        //             const data = doc.data();
+        //             setAiUsage(data?.[today] || 0);
+        //         } else {
+        //             setAiUsage(0);
+        //         }
+        //     } catch (error) {
+        //         console.error("Error fetching AI usage:", error);
+        //     }
+        //     setIsCheckingUsage(false);
+        // };
+            const fetchAiUsage = async () => {
+    setIsCheckingUsage(true);
+
+    try {
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+        const { data, error } = await supabase
+            .from('ai_usage')
+            .select('number_of_ai_questions')
+            .eq('user_id', organizerName)
+            .eq('date_of_usage', today)
+            .single();
+
+        if (error && error.code !== 'PGRST116') {
+            console.error('AI usage fetch error:', error);
+        }
+
+        setAiUsage(data?.number_of_ai_questions ?? 0);
+    } catch (err) {
+        console.error('AI usage error:', err);
+        setAiUsage(0);
+    }
+
+    setIsCheckingUsage(false);
+};
+
         const fetchQuizzes = async () => {
             setIsLoadingQuizzes(true);
             try {
@@ -220,9 +277,9 @@ const CreateQuizPage = () => {
 
         fetchLibraryData();
         fetchAiUsage();
-        fetchQuizzes();
+        // fetchQuizzes();
     }, [organizerName, navigate]);
-    
+
     useEffect(() => {
         if (selectedTechnology === 'all') {
             setSkillsForFilter(masterSkills);
@@ -239,7 +296,7 @@ const CreateQuizPage = () => {
         const sourceQuestions = libraryView === 'mine'
             ? libraryQuestions.filter(q => q.organizerName === organizerName)
             : libraryQuestions;
-        
+
         const searchedQuestions = sourceQuestions.filter(q => {
             if (!librarySearchTerm.trim()) return true;
             const searchTermLower = librarySearchTerm.toLowerCase();
@@ -250,18 +307,18 @@ const CreateQuizPage = () => {
             );
         });
 
-        return searchedQuestions.filter(q => 
+        return searchedQuestions.filter(q =>
             (selectedQuestionType === 'all' || q.type === selectedQuestionType) &&
             (selectedTechnology === 'all' || q.technology === selectedTechnology) &&
             (selectedSkill === 'all' || q.skill === selectedSkill)
         );
     }, [libraryQuestions, selectedTechnology, selectedSkill, selectedQuestionType, libraryView, organizerName, librarySearchTerm]);
-    
+
     const filteredPastQuizzes = useMemo<Quiz[]>(() => {
         if (!pastQuizzesSearchTerm.trim()) return pastQuizzes;
         const searchTermLower = pastQuizzesSearchTerm.toLowerCase();
-        
-        return pastQuizzes.filter(quiz => 
+
+        return pastQuizzes.filter(quiz =>
             quiz.title.toLowerCase().includes(searchTermLower)
         );
     }, [pastQuizzes, pastQuizzesSearchTerm]);
@@ -274,7 +331,7 @@ const CreateQuizPage = () => {
 
     const groupedPastQuizzes = useMemo(() => {
         if (!filteredPastQuizzes) return {};
-        
+
         const groups: { [title: string]: Quiz[] } = {};
 
         filteredPastQuizzes.forEach(quiz => {
@@ -283,22 +340,22 @@ const CreateQuizPage = () => {
             }
             groups[quiz.title].push(quiz);
         });
-        
+
         return groups;
     }, [filteredPastQuizzes]);
 
     const filteredReports = useMemo<Quiz[]>(() => {
         if (!reportSearchTerm.trim()) return pastQuizzes;
         const searchTermLower = reportSearchTerm.toLowerCase();
-        
-        return pastQuizzes.filter(quiz => 
+
+        return pastQuizzes.filter(quiz =>
             quiz.title.toLowerCase().includes(searchTermLower)
         );
     }, [pastQuizzes, reportSearchTerm]);
-    
+
     const groupedReports = useMemo(() => {
         if (!filteredReports) return {};
-        
+
         const groups: { [title: string]: Quiz[] } = {};
 
         filteredReports.forEach(quiz => {
@@ -309,36 +366,36 @@ const CreateQuizPage = () => {
         });
 
         // Quizzes are already sorted by date descending from Firestore query
-        
+
         return groups;
     }, [filteredReports]);
 
     // Validation for custom question form
     useEffect(() => {
         let isValid = true;
-        
+
         if (!customQuestion.text.trim()) isValid = false;
         if (!customQuestion.technology.trim()) isValid = false;
         if (!customQuestion.skill.trim()) isValid = false;
-        
+
         if (customQuestion.type === QuestionType.MCQ || customQuestion.type === QuestionType.SURVEY) {
             if (customQuestion.options.some(opt => !opt.trim())) isValid = false;
         }
-        
+
         if (customQuestion.type === QuestionType.MATCH) {
-             if (customQuestion.matchPairs.some(p => !p.prompt.trim() || !p.correctMatch.trim())) isValid = false;
+            if (customQuestion.matchPairs.some(p => !p.prompt.trim() || !p.correctMatch.trim())) isValid = false;
         }
-    
+
         setIsCustomQuestionValid(isValid);
     }, [customQuestion]);
 
 
     const handleSelectQuestion = (q: Question) => {
-        if(questions.length < 10 && !questions.find(sq => sq.id === q.id)) {
+        if (questions.length < 10 && !questions.find(sq => sq.id === q.id)) {
             setQuestions([...questions, q]);
         }
     };
-    
+
     const handleRemoveQuestion = (id: string) => {
         setQuestions(questions.filter(q => q.id !== id));
     };
@@ -349,10 +406,10 @@ const CreateQuizPage = () => {
 
         const newQuestions = [...questions];
         const targetIndex = direction === 'up' ? index - 1 : index + 1;
-        
+
         // Swap elements
         [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
-        
+
         setQuestions(newQuestions);
     };
 
@@ -376,7 +433,7 @@ const CreateQuizPage = () => {
         }
         setCustomQuestion(baseState);
     };
-    
+
     // Handlers for Survey option changes
     const handleOptionChange = (index: number, value: string) => {
         const newOptions = [...customQuestion.options];
@@ -411,7 +468,7 @@ const CreateQuizPage = () => {
         }
     };
 
-    
+
     const handleAddToLibrary = async () => {
         if (!isCustomQuestionValid) {
             alert('Please fill out all fields correctly.');
@@ -419,38 +476,69 @@ const CreateQuizPage = () => {
         }
         setIsAddingToLibrary(true);
         try {
-            const questionData: any = { 
-                text: customQuestion.text,
-                timeLimit: customQuestion.timeLimit,
+            const questionData = {
+                id: crypto.randomUUID(),                 // REQUIRED (unique key)
+                question_text: customQuestion.text,       // NOT NULL
+                time_limit: customQuestion.timeLimit ?? 30, // ✅ FIX (fallback)
                 technology: customQuestion.technology,
                 skill: customQuestion.skill,
                 type: customQuestion.type,
-                organizerName,
-                creationTime: firebase.firestore.FieldValue.serverTimestamp(),
-             };
-            
-            if (customQuestion.type === QuestionType.MCQ) {
-                questionData.options = customQuestion.options;
-                questionData.correctAnswerIndex = customQuestion.correctAnswerIndex;
-            } else if (customQuestion.type === QuestionType.SURVEY) {
-                 questionData.options = customQuestion.options;
-            } else if (customQuestion.type === QuestionType.MATCH) {
-                questionData.matchPairs = customQuestion.matchPairs.filter(p => p.prompt.trim() && p.correctMatch.trim());
-                questionData.options = questionData.matchPairs.map((p: MatchPair) => p.correctMatch);
-            } else if (customQuestion.type === QuestionType.WORD_CLOUD) {
-                questionData.options = [];
-                questionData.correctAnswers = [];
+                organizer_name: organizerName,
+
+                option_1: customQuestion.options?.[0] ?? null,
+                option_2: customQuestion.options?.[1] ?? null,
+                option_3: customQuestion.options?.[2] ?? null,
+                option_4: customQuestion.options?.[3] ?? null,
+
+                correct_answer_index:
+                    customQuestion.type === QuestionType.MCQ
+                        ? customQuestion.correctAnswerIndex
+                        : null,
+
+                creation_time: new Date().toISOString(),
+            };
+
+
+            // if (customQuestion.type === QuestionType.MCQ) {
+            //     questionData.options = customQuestion.options;
+            //     questionData.correctAnswerIndex = customQuestion.correctAnswerIndex;
+            // } else if (customQuestion.type === QuestionType.SURVEY) {
+            //     questionData.options = customQuestion.options;
+            // } else if (customQuestion.type === QuestionType.MATCH) {
+            //     questionData.matchPairs = customQuestion.matchPairs.filter(p => p.prompt.trim() && p.correctMatch.trim());
+            //     questionData.options = questionData.matchPairs.map((p: MatchPair) => p.correctMatch);
+            // } else if (customQuestion.type === QuestionType.WORD_CLOUD) {
+            //     questionData.options = [];
+            //     questionData.correctAnswers = [];
+            // }
+
+            // const docRef = await db.collection('questionBank').add(questionData);
+
+            // const newQuestionForState = { ...questionData, id: docRef.id } as Question;
+            const { data, error } = await supabase
+                .from('question_bank_structured')
+
+                .insert([questionData])
+                .select()
+                .single();
+
+            if (error) {
+                console.error(error);
+                alert('Failed to add question.');
+                return;
             }
-            
-            const docRef = await db.collection('questionBank').add(questionData);
-            
-            const newQuestionForState = { ...questionData, id: docRef.id } as Question;
+            const newQuestionForState = data as Question;
+            // const newQuestionForState = {
+            //     ...data,
+            //     id: data.id,
+            // } as Question;
+
             setLibraryQuestions(prev => [...prev, newQuestionForState]);
 
             const { technology, skill } = customQuestion;
             if (!technologies.includes(technology)) setTechnologies(prev => [...prev, technology]);
             if (!masterSkills.includes(skill)) setMasterSkills(prev => [...prev, skill]);
-            
+
             // Reset form
             handleQuestionTypeChange(customQuestion.type);
             alert('Question added successfully!');
@@ -462,353 +550,533 @@ const CreateQuizPage = () => {
         setIsAddingToLibrary(false);
     };
 
-    const handleSaveDraft = async () => {
-        if (!finalTitle || questions.length < 1) {
-            alert("A title and at least one question are required to save a draft.");
-            return;
-        }
-        setIsCreating(true);
-        const questionsForQuiz = questions.map(q => {
-            const { creationTime, ...rest } = q;
-            return rest;
-        });
+    // const handleSaveDraft = async () => {
+    //     if (!finalTitle || questions.length < 1) {
+    //         alert("A title and at least one question are required to save a draft.");
+    //         return;
+    //     }
+    //     setIsCreating(true);
+    //     const questionsForQuiz = questions.map(q => {
+    //         const { creationTime, ...rest } = q;
+    //         return rest;
+    //     });
 
-        const quiz: Omit<Quiz, 'hostId' | 'endTime'> = {
-            id: Math.random().toString(36).substring(2, 8).toUpperCase(),
-            title: finalTitle,
-            questions: questionsForQuiz,
-            currentQuestionIndex: 0,
-            gameState: GameState.LOBBY,
-            questionStartTime: null,
-            organizerName: organizerName!,
-            startTime: firebase.firestore.FieldValue.serverTimestamp(),
-            config: quizConfig,
-            isDraft: true,
-            ...(agendaInfo.agendaId && { agendaId: agendaInfo.agendaId }),
-            ...(agendaInfo.agendaName && { agendaName: agendaInfo.agendaName }),
-            ...(agendaInfo.eventId && { eventId: agendaInfo.eventId }),
-        };
+    //     const quiz: Omit<Quiz, 'hostId' | 'endTime'> = {
+    //         id: Math.random().toString(36).substring(2, 8).toUpperCase(),
+    //         title: finalTitle,
+    //         questions: questionsForQuiz,
+    //         currentQuestionIndex: 0,
+    //         gameState: GameState.LOBBY,
+    //         questionStartTime: null,
+    //         organizerName: organizerName!,
+    //         //startTime: firebase.firestore.FieldValue.serverTimestamp(),
+    //         creation_time: new Date().toISOString(),
 
-        try {
-            await db.collection('quizzes').doc(quiz.id).set(quiz);
-            alert("Draft saved successfully!");
-            setTitle('');
-            setDynamicTitle('');
-            setQuestions([]);
-            setDraftQuizzes(prev => [quiz as Quiz, ...prev]);
-        } catch (error) {
-            console.error("Error saving draft:", error);
-            alert("Could not save draft. Please try again.");
-        }
-        setIsCreating(false);
-    };
+    //         config: quizConfig,
+    //         isDraft: true,
+    //         ...(agendaInfo.agendaId && { agendaId: agendaInfo.agendaId }),
+    //         ...(agendaInfo.agendaName && { agendaName: agendaInfo.agendaName }),
+    //         ...(agendaInfo.eventId && { eventId: agendaInfo.eventId }),
+    //     };
+
+    //     try {
+    //         await db.collection('quizzes').doc(quiz.id).set(quiz);
+    //         alert("Draft saved successfully!");
+    //         setTitle('');
+    //         setDynamicTitle('');
+    //         setQuestions([]);
+    //         setDraftQuizzes(prev => [quiz as Quiz, ...prev]);
+    //     } catch (error) {
+    //         console.error("Error saving draft:", error);
+    //         alert("Could not save draft. Please try again.");
+    //     }
+    //     setIsCreating(false);
+    // };
 
     const handleStartLiveQuiz = async () => {
-        if(!finalTitle || questions.length < 1 || questions.length > 10) {
+        if (!finalTitle || questions.length < 1 || questions.length > 10) {
             alert("A title and between 1 to 10 questions are required.");
             return;
         }
+
         setIsCreating(true);
-        const hostId = crypto.randomUUID();
-        
-        const questionsForQuiz = questions.map(q => {
-            const { creationTime, ...rest } = q;
-            return rest;
-        });
-    
-        if (editingDraft) {
-            try {
-                await db.collection('quizzes').doc(editingDraft.id).update({
-                    title: finalTitle,
-                    questions: questionsForQuiz,
-                    config: quizConfig,
-                    isDraft: false,
-                    hostId,
-                    gameState: GameState.LOBBY,
-                    startTime: firebase.firestore.FieldValue.serverTimestamp(),
-                    endTime: null,
-                });
-                localStorage.setItem(`quiz-host-${editingDraft.id}`, hostId);
-                navigate(`/lobby/${editingDraft.id}`);
-            } catch (error) {
-                console.error("Error starting edited quiz:", error);
-                alert("Could not start quiz. Please try again.");
-                setIsCreating(false);
-            }
-        } else {
-            const quiz: Quiz = {
-                id: Math.random().toString(36).substring(2, 8).toUpperCase(),
-                title: finalTitle,
-                questions: questionsForQuiz,
-                currentQuestionIndex: 0,
-                gameState: GameState.LOBBY,
-                questionStartTime: null,
-                hostId,
-                organizerName: organizerName!,
-                startTime: firebase.firestore.FieldValue.serverTimestamp(),
-                endTime: null,
-                config: quizConfig,
-                isDraft: false,
-                ...(agendaInfo.agendaId && { agendaId: agendaInfo.agendaId }),
-                ...(agendaInfo.agendaName && { agendaName: agendaInfo.agendaName }),
-                ...(agendaInfo.eventId && { eventId: agendaInfo.eventId }),
-            };
-            try {
-                await db.collection('quizzes').doc(quiz.id).set(quiz);
-                localStorage.setItem(`quiz-host-${quiz.id}`, hostId);
-                navigate(`/lobby/${quiz.id}`);
-            } catch (error) {
-                console.error("Error creating quiz:", error);
-                alert("Could not create quiz. Please try again.");
-                setIsCreating(false);
-            }
-        }
-    };
-    
-    const handleReuseQuiz = (quizToReuse: Quiz) => {
-        if (agendaInfo.agendaName) {
-            const prefix = `${agendaInfo.agendaName} - `;
-            if (quizToReuse.title.startsWith(prefix)) {
-                const dynamicPart = quizToReuse.title.substring(prefix.length);
-                setDynamicTitle(dynamicPart);
-            } else {
-                setDynamicTitle(quizToReuse.title);
-            }
-        } else {
-            setTitle(quizToReuse.title);
-        }
-        setQuestions(quizToReuse.questions);
-        setView('library'); // Stays in the library view to allow adding more questions
-    };
 
-    const handleArchiveQuiz = async (quizId: string) => {
-        if (window.confirm('Are you sure you want to archive this quiz? It will be hidden from this list but its data will be preserved for analytics.')) {
-            try {
-                await db.collection('quizzes').doc(quizId).update({ isArchived: true });
-                setPastQuizzes(prev => prev.filter(q => q.id !== quizId));
-            } catch (error) {
-                console.error("Error archiving quiz:", error);
-                alert('Failed to archive quiz.');
-            }
-        }
-    };
+        const quizId = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-    const handleDeleteDraft = async (quizId: string) => {
-        if (window.confirm("Are you sure you want to permanently delete this draft?")) {
-            try {
-                await db.collection('quizzes').doc(quizId).delete();
-                setDraftQuizzes(prev => prev.filter(q => q.id !== quizId));
-            } catch (error) {
-                console.error("Error deleting draft:", error);
-                alert("Failed to delete draft.");
-            }
-        }
-    };
+        const quizPayload = {
+            quiz_id: quizId,
+            title: finalTitle,
+            organizer_name: organizerName!,
+            questions,
+            game_state: GameState.LOBBY,
+            is_draft: false,
+            config: quizConfig,
+            created_at: new Date().toISOString(),
+            ...(agendaInfo.agendaId && { agenda_id: agendaInfo.agendaId }),
+            ...(agendaInfo.agendaName && { agenda_name: agendaInfo.agendaName }),
+            ...(agendaInfo.eventId && { event_id: agendaInfo.eventId }),
+        };
 
-    const handleEditDraft = (quizToEdit: Quiz) => {
-        setEditingDraft(quizToEdit);
-        
-        if (quizToEdit.agendaName) {
-            const prefix = `${quizToEdit.agendaName} - `;
-            if (quizToEdit.title.startsWith(prefix)) {
-                setDynamicTitle(quizToEdit.title.substring(prefix.length));
-            } else {
-                setDynamicTitle(quizToEdit.title);
-            }
-        } else {
-            setTitle(quizToEdit.title);
-        }
-        setQuestions(quizToEdit.questions);
-        setQuizConfig(quizToEdit.config);
-    
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
+        const { error } = await supabase
+            .from('quiz_master')
+            .insert([quizPayload]);
 
-    const handleCancelEdit = () => {
-        setEditingDraft(null);
-        setTitle('');
-        setDynamicTitle('');
-        setQuestions([]);
-        setQuizConfig({
-            showLiveResponseCount: true,
-            showQuestionToPlayers: true,
-            clanBased: false,
-            clanNames: { [Clan.TITANS]: 'Titans', [Clan.DEFENDERS]: 'Defenders' },
-            clanAssignment: 'autoBalance',
-        });
-    };
-
-    const handleUpdateDraft = async () => {
-        if (!editingDraft) return;
-        if (!finalTitle || questions.length < 1) {
-            alert("A title and at least one question are required to update the draft.");
+        if (error) {
+            console.error("Supabase quiz insert failed:", error);
+            alert("Failed to create quiz");
+            setIsCreating(false);
             return;
         }
-        setIsCreating(true);
-        
-        const questionsForQuiz = questions.map(q => {
-            const { creationTime, ...rest } = q;
-            return rest;
-        });
+
+        navigate(`/lobby/${quizId}`);
+    };
+
+
+    // const handleReuseQuiz = (quizToReuse: Quiz) => {
+    //     if (agendaInfo.agendaName) {
+    //         const prefix = `${agendaInfo.agendaName} - `;
+    //         if (quizToReuse.title.startsWith(prefix)) {
+    //             const dynamicPart = quizToReuse.title.substring(prefix.length);
+    //             setDynamicTitle(dynamicPart);
+    //         } else {
+    //             setDynamicTitle(quizToReuse.title);
+    //         }
+    //     } else {
+    //         setTitle(quizToReuse.title);
+    //     }
+    //     setQuestions(quizToReuse.questions);
+    //     setView('library'); // Stays in the library view to allow adding more questions
+    // };
+
+    // const handleArchiveQuiz = async (quizId: string) => {
+    //     if (window.confirm('Are you sure you want to archive this quiz? It will be hidden from this list but its data will be preserved for analytics.')) {
+    //         try {
+    //             await db.collection('quizzes').doc(quizId).update({ isArchived: true });
+    //             setPastQuizzes(prev => prev.filter(q => q.id !== quizId));
+    //         } catch (error) {
+    //             console.error("Error archiving quiz:", error);
+    //             alert('Failed to archive quiz.');
+    //         }
+    //     }
+    // };
+
+    // const handleDeleteDraft = async (quizId: string) => {
+    //     if (window.confirm("Are you sure you want to permanently delete this draft?")) {
+    //         try {
+    //             await db.collection('quizzes').doc(quizId).delete();
+    //             setDraftQuizzes(prev => prev.filter(q => q.id !== quizId));
+    //         } catch (error) {
+    //             console.error("Error deleting draft:", error);
+    //             alert("Failed to delete draft.");
+    //         }
+    //     }
+    // };
+
+    // const handleEditDraft = (quizToEdit: Quiz) => {
+    //     setEditingDraft(quizToEdit);
+
+    //     if (quizToEdit.agendaName) {
+    //         const prefix = `${quizToEdit.agendaName} - `;
+    //         if (quizToEdit.title.startsWith(prefix)) {
+    //             setDynamicTitle(quizToEdit.title.substring(prefix.length));
+    //         } else {
+    //             setDynamicTitle(quizToEdit.title);
+    //         }
+    //     } else {
+    //         setTitle(quizToEdit.title);
+    //     }
+    //     setQuestions(quizToEdit.questions);
+    //     setQuizConfig(quizToEdit.config);
+
+    //     window.scrollTo({ top: 0, behavior: 'smooth' });
+    // };
+
+    // const handleCancelEdit = () => {
+    //     setEditingDraft(null);
+    //     setTitle('');
+    //     setDynamicTitle('');
+    //     setQuestions([]);
+    //     setQuizConfig({
+    //         showLiveResponseCount: true,
+    //         showQuestionToPlayers: true,
+    //         clanBased: false,
+    //         clanNames: { [Clan.TITANS]: 'Titans', [Clan.DEFENDERS]: 'Defenders' },
+    //         clanAssignment: 'autoBalance',
+    //     });
+    // };
+
+    // const handleUpdateDraft = async () => {
+    //     if (!editingDraft) return;
+    //     if (!finalTitle || questions.length < 1) {
+    //         alert("A title and at least one question are required to update the draft.");
+    //         return;
+    //     }
+    //     setIsCreating(true);
+
+    //     const questionsForQuiz = questions.map(q => {
+    //         const { creationTime, ...rest } = q;
+    //         return rest;
+    //     });
+
+    //     const updatedQuizData = {
+    //         title: finalTitle,
+    //         questions: questionsForQuiz,
+    //         config: quizConfig,
+    //         startTime: firebase.firestore.FieldValue.serverTimestamp(), // Acts as "last modified"
+    //     };
+
+    //     try {
+    //         await db.collection('quizzes').doc(editingDraft.id).update(updatedQuizData);
+    //         alert("Draft updated successfully!");
+
+    //         setDraftQuizzes(prev =>
+    //             prev.map(q =>
+    //                 q.id === editingDraft.id ? { ...q, ...updatedQuizData } : q
+    //             )
+    //         );
+    //         handleCancelEdit();
+    //     } catch (error) {
+    //         console.error("Error updating draft:", error);
+    //         alert("Could not update draft. Please try again.");
+    //     }
+    //     setIsCreating(false);
+    // };
+
+    // const handleGenerateQuestions = async () => {
+    //     if (!aiTopic || !aiSkill) {
+    //         setAiError("Please provide a topic and a skill level.");
+    //         return;
+    //     }
+    //     if (aiUsage + aiNumQuestions > dailyAiLimit) {
+    //         setAiError(`This would exceed your daily limit of ${dailyAiLimit} questions.`);
+    //         return;
+    //     }
+    //     setIsGenerating(true);
+    //     setAiError(null);
+    //     setGeneratedQuestions([]);
+    //     setEditingQuestionIndex(null);
+
+    //     try {
+    //         const questions: Omit<Question, 'id'>[] = await generateQuestions(aiTopic, aiSkill, aiNumQuestions);
+
+    //         const originalCount = questions.length;
+    //         const validQuestions = questions.filter(q =>
+    //             countWords(q.text) <= 20 &&
+    //             q.options.every(opt => countWords(opt) <= 10)
+    //         );
+
+    //         if (validQuestions.length < originalCount) {
+    //             setAiError(`AI generated ${originalCount} questions, but ${originalCount - validQuestions.length} were filtered out for exceeding word limits. Please review the generated questions.`);
+    //         }
+
+    //         setGeneratedQuestions(validQuestions.map(q => ({ ...q, status: undefined })));
+
+    //         // Update usage in Firestore
+    //         const today = new Date().toISOString().split('T')[0];
+    //         const usageRef = db.collection('aiUsage').doc(organizerName!);
+    //         await db.runTransaction(async (transaction) => {
+    //             const doc = await transaction.get(usageRef);
+    //             const updateData = { [today]: firebase.firestore.FieldValue.increment(validQuestions.length) };
+    //             if (!doc.exists) {
+    //                 transaction.set(usageRef, { [today]: validQuestions.length });
+    //             } else {
+    //                 transaction.update(usageRef, updateData);
+    //             }
+    //         });
+    //         setAiUsage(prev => prev + validQuestions.length);
+
+    //     } catch (error: any) {
+    //         setAiError(error.message || "An unknown error occurred while generating questions.");
+    //     }
+    //     setIsGenerating(false);
+    // };
+//        const handleGenerateQuestions = async () => {
+
+//     if (!organizerName) {
+//         alert('Organizer session expired. Please login again.');
+//         navigate('/');
+//         return;
+//     }
+
+//     if (!aiTopic || !aiSkill) {
+//         setAiError("Please provide a topic and a skill level.");
+//         return;
+//     }
+
+//     if (aiUsage + aiNumQuestions > dailyAiLimit) {
+//         setAiError(`Daily limit exceeded (${dailyAiLimit} questions per day).`);
+//         return;
+//     }
+
+//     setIsGenerating(true);
+//     setAiError(null);
+
+//     try {
+//         const questions = await generateQuestions(
+//             aiTopic,
+//             aiSkill,
+//             aiNumQuestions
+//         );
+
+//         const validQuestions = questions.filter(q =>
+//             countWords(q.text) <= 20 &&
+//             q.options.every(opt => countWords(opt) <= 10)
+//         );
+
+//         setGeneratedQuestions(
+//             validQuestions.map(q => ({ ...q, status: undefined }))
+//         );
+
+//         const today = new Date().toISOString().split('T')[0];
+
+//         const { error } = await supabase
+//             .from('ai_usage')
+//             .upsert(
+//                 {
+//                     user_id: organizerName,
+//                     date_of_usage: today,
+//                     number_of_ai_questions: aiUsage + validQuestions.length,
+//                 },
+//                 { onConflict: 'user_id,date_of_usage' }
+//             );
+
+//         if (error) {
+//             console.error('AI usage update failed:', error);
+//         } else {
+//             setAiUsage(prev => prev + validQuestions.length);
+//         }
+
+//     } catch (err: any) {
+//         console.error('AI generation failed:', err);
+//         setAiError(err?.message || 'AI generation failed');
+//     }
+
+//     setIsGenerating(false);
+// };
+
+const handleGenerateQuestions = async () => {
+  if (!aiTopic || !aiSkill) {
+    setAiError("Please provide a topic and a skill level.");
+    return;
+  }
+
+  if (aiUsage + aiNumQuestions > dailyAiLimit) {
+    setAiError(`Daily limit exceeded (${dailyAiLimit} questions per day).`);
+    return;
+  }
+
+  setIsGenerating(true);
+  setAiError(null);
+
+  try {
+    const questions = await generateQuestions(aiTopic, aiSkill, aiNumQuestions);
+
+    const validQuestions = questions.filter(q =>
+      q &&
+      typeof q.text === 'string' &&
+      Array.isArray(q.options) &&
+      q.options.length > 0 &&
+      countWords(q.text) <= 20 &&
+      q.options.every(
+        opt => typeof opt === 'string' && countWords(opt) <= 10
+      )
+    );
+
+    setGeneratedQuestions(
+      validQuestions.map(q => ({ ...q, status: undefined }))
+    );
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data: existing } = await supabase
+      .from('ai_usage')
+      .select('number_of_ai_questions')
+      .eq('user_id', organizerName)
+      .eq('date_of_usage', today)
+      .single();
+
+    const newCount =
+      (existing?.number_of_ai_questions ?? 0) + validQuestions.length;
+
+    await supabase
+      .from('ai_usage')
+      .upsert(
+        {
+          user_id: organizerName,
+          date_of_usage: today,
+          number_of_ai_questions: newCount,
+        },
+        { onConflict: 'user_id,date_of_usage' }
+      );
+
+    setAiUsage(newCount);
+
+  } catch (err: any) {
+    console.error('AI generation failed:', err);
+    setAiError(err?.message || 'AI generation failed');
+  }
+
+  setIsGenerating(false);
+};
+
+    // const handleAddFromGenerator = async (questionDataToAdd: Omit<Question, 'id'> & { status?: 'adding' | 'added' }, index: number) => {
+    //     setGeneratedQuestions(prev =>
+    //         prev.map((q, i) => (i === index ? { ...q, status: 'adding' } : q))
+    //     );
+
+    //     try {
+    //         const { status, ...questionCoreData } = questionDataToAdd; // Fix: destructure to remove UI-only status field
+
+    //         const questionData = {
+    //             ...questionCoreData,
+    //             organizerName,
+    //             creationTime: firebase.firestore.FieldValue.serverTimestamp()
+    //         };
+
+    //         const docRef = await db.collection('questionBank').add(questionData);
+
+    //         const newLibraryQuestion = { ...questionData, id: docRef.id } as Question;
+    //         setLibraryQuestions(prev => [...prev, newLibraryQuestion]);
+
+    //         if (!technologies.includes(questionCoreData.technology)) setTechnologies(prev => [...prev, questionCoreData.technology]);
+    //         if (!masterSkills.includes(questionCoreData.skill)) setMasterSkills(prev => [...prev, questionCoreData.skill]);
+
+    //         setGeneratedQuestions(prev =>
+    //             prev.map((q, i) => (i === index ? { ...q, status: 'added' } : q))
+    //         );
+    //     } catch (error) {
+    //         console.error("Error adding generated question:", error);
+    //         alert("Failed to add question to library.");
+    //         setGeneratedQuestions(prev =>
+    //             prev.map((q, i) => {
+    //                 if (i === index) {
+    //                     const { status, ...rest } = q;
+    //                     return rest;
+    //                 }
+    //                 return q;
+    //             })
+    //         );
+    //     }
+    // };
+
+
     
-        const updatedQuizData = {
-            title: finalTitle,
-            questions: questionsForQuiz,
-            config: quizConfig,
-            startTime: firebase.firestore.FieldValue.serverTimestamp(), // Acts as "last modified"
-        };
-    
+
+    // const handleSaveFromGenerator = (editedData: Omit<Question, 'id'>, index: number) => {
+    //     const newGeneratedQuestions = [...generatedQuestions];
+    //     newGeneratedQuestions[index] = { ...editedData, status: newGeneratedQuestions[index].status };
+    //     setGeneratedQuestions(newGeneratedQuestions);
+    //     setEditingQuestionIndex(null); // Close the modal
+    // };
+
+    // const handleUpdateLibraryQuestion = async (updatedData: Omit<Question, 'id'>) => {
+    //     if (!editingLibraryQuestion) return;
+
+    //     const questionToUpdate: Question = { ...editingLibraryQuestion, ...updatedData };
+
+    //     if (questionToUpdate.type === QuestionType.SURVEY) {
+    //         delete questionToUpdate.correctAnswerIndex;
+    //     } else if (questionToUpdate.type === QuestionType.MATCH) {
+    //         questionToUpdate.options = (questionToUpdate.matchPairs || []).map(p => p.correctMatch);
+    //     } else if (questionToUpdate.type === QuestionType.WORD_CLOUD) {
+    //         // In edit mode, options are not regenerated. Assume they are stored correctly.
+    //     }
+
+    //     try {
+    //         const docRef = db.collection('questionBank').doc(questionToUpdate.id);
+    //         const { id, ...dataToSave } = questionToUpdate;
+    //         await docRef.update(dataToSave);
+
+    //         setLibraryQuestions(prev => prev.map(q => q.id === id ? questionToUpdate : q));
+    //         setEditingLibraryQuestion(null);
+    //     } catch (error) {
+    //         console.error("Error updating question:", error);
+    //         alert('Failed to update question.');
+    //     }
+    // };
+    const handleUpdateLibraryQuestion = async (
+        questionId: string,
+        updatedData: Partial<Question>
+    ) => {
         try {
-            await db.collection('quizzes').doc(editingDraft.id).update(updatedQuizData);
-            alert("Draft updated successfully!");
-            
-            setDraftQuizzes(prev => 
-                prev.map(q => 
-                    q.id === editingDraft.id ? { ...q, ...updatedQuizData } : q
+            const { error } = await supabase
+                .from('question_bank_structured')
+                .update({
+                    question_text: updatedData.text,
+                    time_limit: updatedData.timeLimit,
+                    technology: updatedData.technology,
+                    skill: updatedData.skill,
+                    type: updatedData.type,
+
+                    option_1: updatedData.options?.[0] ?? null,
+                    option_2: updatedData.options?.[1] ?? null,
+                    option_3: updatedData.options?.[2] ?? null,
+                    option_4: updatedData.options?.[3] ?? null,
+
+                    correct_answer_index: updatedData.correctAnswerIndex ?? null,
+                })
+                .eq('pk_id', Number(questionId));
+
+            if (error) throw error;
+
+            // Update UI state
+            setLibraryQuestions(prev =>
+                prev.map(q =>
+                    q.id === questionId ? { ...q, ...updatedData } : q
                 )
             );
-            handleCancelEdit();
-        } catch (error) {
-            console.error("Error updating draft:", error);
-            alert("Could not update draft. Please try again.");
-        }
-        setIsCreating(false);
-    };
 
-    const handleGenerateQuestions = async () => {
-        if (!aiTopic || !aiSkill) {
-            setAiError("Please provide a topic and a skill level.");
-            return;
-        }
-        if (aiUsage + aiNumQuestions > dailyAiLimit) {
-            setAiError(`This would exceed your daily limit of ${dailyAiLimit} questions.`);
-            return;
-        }
-        setIsGenerating(true);
-        setAiError(null);
-        setGeneratedQuestions([]);
-        setEditingQuestionIndex(null);
-
-        try {
-            const questions: Omit<Question, 'id'>[] = await generateQuestions(aiTopic, aiSkill, aiNumQuestions);
-
-            const originalCount = questions.length;
-            const validQuestions = questions.filter(q => 
-                countWords(q.text) <= 20 &&
-                q.options.every(opt => countWords(opt) <= 10)
-            );
-
-            if (validQuestions.length < originalCount) {
-                setAiError(`AI generated ${originalCount} questions, but ${originalCount - validQuestions.length} were filtered out for exceeding word limits. Please review the generated questions.`);
-            }
-
-            setGeneratedQuestions(validQuestions.map(q => ({...q, status: undefined })));
-
-            // Update usage in Firestore
-            const today = new Date().toISOString().split('T')[0];
-            const usageRef = db.collection('aiUsage').doc(organizerName!);
-            await db.runTransaction(async (transaction) => {
-                const doc = await transaction.get(usageRef);
-                const updateData = { [today]: firebase.firestore.FieldValue.increment(validQuestions.length) };
-                if (!doc.exists) {
-                    transaction.set(usageRef, { [today]: validQuestions.length });
-                } else {
-                    transaction.update(usageRef, updateData);
-                }
-            });
-            setAiUsage(prev => prev + validQuestions.length);
-
-        } catch (error: any) {
-            setAiError(error.message || "An unknown error occurred while generating questions.");
-        }
-        setIsGenerating(false);
-    };
-
-    const handleAddFromGenerator = async (questionDataToAdd: Omit<Question, 'id'> & { status?: 'adding' | 'added' }, index: number) => {
-        setGeneratedQuestions(prev =>
-            prev.map((q, i) => (i === index ? { ...q, status: 'adding' } : q))
-        );
-    
-        try {
-            const { status, ...questionCoreData } = questionDataToAdd; // Fix: destructure to remove UI-only status field
-
-            const questionData = {
-                ...questionCoreData,
-                organizerName,
-                creationTime: firebase.firestore.FieldValue.serverTimestamp()
-            };
-            
-            const docRef = await db.collection('questionBank').add(questionData);
-            
-            const newLibraryQuestion = { ...questionData, id: docRef.id } as Question;
-            setLibraryQuestions(prev => [...prev, newLibraryQuestion]);
-
-            if (!technologies.includes(questionCoreData.technology)) setTechnologies(prev => [...prev, questionCoreData.technology]);
-            if (!masterSkills.includes(questionCoreData.skill)) setMasterSkills(prev => [...prev, questionCoreData.skill]);
-            
-            setGeneratedQuestions(prev =>
-                prev.map((q, i) => (i === index ? { ...q, status: 'added' } : q))
-            );
-        } catch (error) {
-            console.error("Error adding generated question:", error);
-            alert("Failed to add question to library.");
-            setGeneratedQuestions(prev =>
-                prev.map((q, i) => {
-                    if (i === index) {
-                        const { status, ...rest } = q;
-                        return rest;
-                    }
-                    return q;
-                })
-            );
-        }
-    };
-
-    const handleSaveFromGenerator = (editedData: Omit<Question, 'id'>, index: number) => {
-        const newGeneratedQuestions = [...generatedQuestions];
-        newGeneratedQuestions[index] = { ...editedData, status: newGeneratedQuestions[index].status };
-        setGeneratedQuestions(newGeneratedQuestions);
-        setEditingQuestionIndex(null); // Close the modal
-    };
-    
-    const handleUpdateLibraryQuestion = async (updatedData: Omit<Question, 'id'>) => {
-        if (!editingLibraryQuestion) return;
-        
-        const questionToUpdate: Question = { ...editingLibraryQuestion, ...updatedData };
-        
-        if (questionToUpdate.type === QuestionType.SURVEY) {
-            delete questionToUpdate.correctAnswerIndex;
-        } else if (questionToUpdate.type === QuestionType.MATCH) {
-             questionToUpdate.options = (questionToUpdate.matchPairs || []).map(p => p.correctMatch);
-        } else if (questionToUpdate.type === QuestionType.WORD_CLOUD) {
-            // In edit mode, options are not regenerated. Assume they are stored correctly.
-        }
-        
-        try {
-            const docRef = db.collection('questionBank').doc(questionToUpdate.id);
-            const { id, ...dataToSave } = questionToUpdate;
-            await docRef.update(dataToSave);
-
-            setLibraryQuestions(prev => prev.map(q => q.id === id ? questionToUpdate : q));
+            alert('Question updated successfully');
             setEditingLibraryQuestion(null);
-        } catch (error) {
-            console.error("Error updating question:", error);
-            alert('Failed to update question.');
+        } catch (err) {
+            console.error('Update failed:', err);
+            alert('Failed to update question');
         }
     };
+
+
+    // const handleDeleteLibraryQuestion = async (questionId: string) => {
+    //     if (window.confirm('Are you sure you want to delete this question forever?')) {
+    //         try {
+    //             await db.collection('questionBank').doc(questionId).delete();
+    //             setLibraryQuestions(prev => prev.filter(q => q.id !== questionId));
+    //             setQuestions(prev => prev.filter(q => q.id !== questionId));
+    //         } catch (error) {
+    //             console.error("Error deleting question:", error);
+    //             alert('Failed to delete question.');
+    //         }
+    //     }
+    // };
 
     const handleDeleteLibraryQuestion = async (questionId: string) => {
-        if (window.confirm('Are you sure you want to delete this question forever?')) {
-            try {
-                await db.collection('questionBank').doc(questionId).delete();
-                setLibraryQuestions(prev => prev.filter(q => q.id !== questionId));
-                setQuestions(prev => prev.filter(q => q.id !== questionId));
-            } catch (error) {
-                console.error("Error deleting question:", error);
-                alert('Failed to delete question.');
-            }
+        if (!window.confirm('Are you sure you want to delete this question?')) return;
+
+        try {
+            const { error } = await supabase
+                .from('question_bank_structured')
+                .delete()
+                .eq('pk_id', Number(questionId));
+
+            if (error) throw error;
+
+            // Remove from UI
+            setLibraryQuestions(prev =>
+                prev.filter(q => q.id !== questionId)
+            );
+
+            // Also remove from selected quiz questions if present
+            setQuestions(prev =>
+                prev.filter(q => q.id !== questionId)
+            );
+
+            alert('Question deleted successfully');
+        } catch (err) {
+            console.error('Delete failed:', err);
+            alert('Failed to delete question');
         }
     };
+
+
 
     const numOptions = useMemo(() => ['3', '5', '10'], []);
 
@@ -820,7 +1088,7 @@ const CreateQuizPage = () => {
         <div className="p-4 sm:p-8 animate-fade-in">
             <h1 className="text-4xl font-bold text-center my-8">{editingDraft ? `Editing: ${editingDraft.title}` : 'Create a New Quiz'}</h1>
             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
-            
+
                 <div className="space-y-6">
                     <Card>
                         <label htmlFor={agendaInfo.agendaName ? "dynamic-title" : "title"} className="block text-lg font-medium text-slate-800 mb-2">Quiz Title</label>
@@ -867,21 +1135,21 @@ const CreateQuizPage = () => {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div>
                                             <label className="block text-sm font-medium text-slate-700 mb-1">Clan 1 Name</label>
-                                            <input type="text" value={quizConfig.clanNames?.[Clan.TITANS]} onChange={e => setQuizConfig(p => ({ ...p, clanNames: {...p.clanNames, [Clan.TITANS]: e.target.value} }))} className="w-full bg-white border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none"/>
+                                            <input type="text" value={quizConfig.clanNames?.[Clan.TITANS]} onChange={e => setQuizConfig(p => ({ ...p, clanNames: { ...p.clanNames, [Clan.TITANS]: e.target.value } }))} className="w-full bg-white border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none" />
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-slate-700 mb-1">Clan 2 Name</label>
-                                            <input type="text" value={quizConfig.clanNames?.[Clan.DEFENDERS]} onChange={e => setQuizConfig(p => ({ ...p, clanNames: {...p.clanNames, [Clan.DEFENDERS]: e.target.value} }))} className="w-full bg-white border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none"/>
+                                            <input type="text" value={quizConfig.clanNames?.[Clan.DEFENDERS]} onChange={e => setQuizConfig(p => ({ ...p, clanNames: { ...p.clanNames, [Clan.DEFENDERS]: e.target.value } }))} className="w-full bg-white border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none" />
                                         </div>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700 mb-2">Clan Assignment</label>
                                         <div className="flex gap-4">
                                             <label className="flex items-center gap-2 cursor-pointer">
-                                                <input type="radio" value="playerChoice" checked={quizConfig.clanAssignment === 'playerChoice'} onChange={() => setQuizConfig(p => ({...p, clanAssignment: 'playerChoice'}))} className="custom-radio"/> Player Choice
+                                                <input type="radio" value="playerChoice" checked={quizConfig.clanAssignment === 'playerChoice'} onChange={() => setQuizConfig(p => ({ ...p, clanAssignment: 'playerChoice' }))} className="custom-radio" /> Player Choice
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer">
-                                                <input type="radio" value="autoBalance" checked={quizConfig.clanAssignment === 'autoBalance'} onChange={() => setQuizConfig(p => ({...p, clanAssignment: 'autoBalance'}))} className="custom-radio"/> Automatic Balancing
+                                                <input type="radio" value="autoBalance" checked={quizConfig.clanAssignment === 'autoBalance'} onChange={() => setQuizConfig(p => ({ ...p, clanAssignment: 'autoBalance' }))} className="custom-radio" /> Automatic Balancing
                                             </label>
                                         </div>
                                     </div>
@@ -890,8 +1158,8 @@ const CreateQuizPage = () => {
                         </div>
                     </Card>
                     <Card>
-                         <h2 className="text-xl font-bold mb-3 text-slate-800">Your Questions ({questions.length}/10)</h2>
-                         <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                        <h2 className="text-xl font-bold mb-3 text-slate-800">Your Questions ({questions.length}/10)</h2>
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                             {questions.map((q, i) => (
                                 <div key={q.id} className="bg-slate-100 p-2 rounded-md flex justify-between items-center gap-2">
                                     <p className="flex-grow text-slate-700 truncate">{i + 1}. {q.text}</p>
@@ -909,14 +1177,16 @@ const CreateQuizPage = () => {
                                 </div>
                             ))}
                             {questions.length < 1 && <p className="text-yellow-600 p-2">Add at least 1 question.</p>}
-                         </div>
+                        </div>
                         <div className="mt-6 flex flex-col sm:flex-row gap-3">
                             {editingDraft ? (
-                                <Button onClick={handleUpdateDraft} disabled={!finalTitle || questions.length < 1 || isCreating} className="bg-slate-600 hover:bg-slate-700">
+                                <Button onClick={() => notAvailable()}
+ disabled={!finalTitle || questions.length < 1 || isCreating} className="bg-slate-600 hover:bg-slate-700">
                                     {isCreating ? 'Updating...' : 'Update Draft'}
                                 </Button>
                             ) : (
-                                <Button onClick={handleSaveDraft} disabled={!finalTitle || questions.length < 1 || isCreating} className="bg-slate-600 hover:bg-slate-700">
+                                <Button onClick={() => notAvailable()}
+ disabled={!finalTitle || questions.length < 1 || isCreating} className="bg-slate-600 hover:bg-slate-700">
                                     {isCreating ? 'Saving...' : 'Save Draft'}
                                 </Button>
                             )}
@@ -926,7 +1196,8 @@ const CreateQuizPage = () => {
                         </div>
                         {editingDraft && (
                             <div className="mt-3 text-center">
-                                <button onClick={handleCancelEdit} className="text-sm text-slate-500 hover:underline">
+                                <button onClick={() => notAvailable()}
+ className="text-sm text-slate-500 hover:underline">
                                     Cancel Edit
                                 </button>
                             </div>
@@ -942,7 +1213,7 @@ const CreateQuizPage = () => {
                         <button onClick={() => setView('custom')} className={`py-2 px-4 font-semibold whitespace-nowrap ${view === 'custom' ? 'text-gl-orange-600 border-b-2 border-gl-orange-600' : 'text-slate-500'}`}>Add Custom</button>
                         <button onClick={() => setView('ai')} className={`py-2 px-4 font-semibold whitespace-nowrap ${view === 'ai' ? 'text-gl-orange-600 border-b-2 border-gl-orange-600' : 'text-slate-500'}`}>Generate (AI)</button>
                     </div>
-                    
+
                     {view === 'past' && (
                         <div className="max-h-[65vh] overflow-y-auto pr-2 space-y-6">
                             {isLoadingQuizzes ? <div className="flex justify-center p-8"><LoadingSpinner /></div> : (
@@ -964,8 +1235,8 @@ const CreateQuizPage = () => {
                                                             <p className="text-sm text-slate-500">{q.questions.length} Questions</p>
                                                         </div>
                                                         <div className="flex items-center gap-2 self-end sm:self-center">
-                                                            <button onClick={() => handleEditDraft(q)} className="text-sm font-bold text-white bg-blue-500 hover:bg-blue-600 px-3 py-1.5 rounded-lg transition-colors">Edit</button>
-                                                            <button onClick={() => handleDeleteDraft(q.id)} title="Delete draft" className="p-2 text-slate-500 bg-slate-200 hover:bg-red-500 hover:text-white rounded-lg transition-colors"><DeleteIcon /></button>
+                                                            <button onClick={() => () => notAvailable()} className="text-sm font-bold text-white bg-blue-500 hover:bg-blue-600 px-3 py-1.5 rounded-lg transition-colors">Edit</button>
+                                                            <button onClick={() => () => notAvailable()} title="Delete draft" className="p-2 text-slate-500 bg-slate-200 hover:bg-red-500 hover:text-white rounded-lg transition-colors"><DeleteIcon /></button>
                                                         </div>
                                                     </div>
                                                 ))
@@ -1005,8 +1276,8 @@ const CreateQuizPage = () => {
                                                                                 </div>
                                                                             </div>
                                                                             <div className="flex items-center gap-2 self-end sm:self-center">
-                                                                                <button onClick={() => handleReuseQuiz(q)} className="text-sm font-bold text-white bg-gl-orange-500 hover:bg-gl-orange-600 px-3 py-1.5 rounded-lg transition-colors">Reuse</button>
-                                                                                <button onClick={() => handleArchiveQuiz(q.id)} title="Archive this quiz" className="p-2 text-slate-500 bg-slate-200 hover:bg-red-500 hover:text-white rounded-lg transition-colors"><DeleteIcon className="w-4 h-4" /></button>
+                                                                                <button onClick={() => () => notAvailable()} className="text-sm font-bold text-white bg-gl-orange-500 hover:bg-gl-orange-600 px-3 py-1.5 rounded-lg transition-colors">Reuse</button>
+                                                                                <button onClick={() => () => notAvailable()} title="Archive this quiz" className="p-2 text-slate-500 bg-slate-200 hover:bg-red-500 hover:text-white rounded-lg transition-colors"><DeleteIcon className="w-4 h-4" /></button>
                                                                             </div>
                                                                         </div>
                                                                     ))}
@@ -1026,7 +1297,7 @@ const CreateQuizPage = () => {
                     {view === 'reports' && (
                         <div>
                             <div className="relative mb-4">
-                                <input 
+                                <input
                                     type="text"
                                     placeholder="Search reports by title"
                                     value={reportSearchTerm}
@@ -1046,7 +1317,7 @@ const CreateQuizPage = () => {
                                             const isExpanded = expandedReportGroup === title;
                                             return (
                                                 <div key={title} className="p-4 rounded-xl border bg-white border-slate-200 shadow-sm transition-all">
-                                                    <button 
+                                                    <button
                                                         onClick={() => setExpandedReportGroup(isExpanded ? null : title)}
                                                         className="w-full flex justify-between items-center text-left gap-4"
                                                         aria-expanded={isExpanded}
@@ -1075,7 +1346,7 @@ const CreateQuizPage = () => {
                                                                             <div className="flex items-center gap-1.5 text-slate-600">
                                                                                 <UsersIcon className="w-4 h-4" />
                                                                                 <span className="font-bold text-slate-800 text-base">
-                                                                                     {typeof q.participantCount === 'number' ? q.participantCount : '--'}
+                                                                                    {typeof q.participantCount === 'number' ? q.participantCount : '--'}
                                                                                 </span>
                                                                                 <span className="text-sm">Participants</span>
                                                                             </div>
@@ -1109,7 +1380,7 @@ const CreateQuizPage = () => {
                                 <button onClick={() => setLibraryView('mine')} className={`w-1/2 py-1 rounded-md text-sm font-semibold ${libraryView === 'mine' ? 'bg-gl-orange-600 text-white' : 'text-slate-600'}`}>My Library</button>
                             </div>
                             <div className="relative mb-4">
-                                <input 
+                                <input
                                     type="text"
                                     placeholder="Search by question, tech, or skill..."
                                     value={librarySearchTerm}
@@ -1157,8 +1428,8 @@ const CreateQuizPage = () => {
                                                     <div className="flex items-center gap-2">
                                                         {libraryView === 'mine' && (
                                                             <>
-                                                            <button title="Edit question" onClick={() => setEditingLibraryQuestion(q)} className="text-slate-500 hover:text-slate-800 p-1 rounded-full bg-slate-200 hover:bg-slate-300 transition"><EditIcon /></button>
-                                                            <button title="Delete question" onClick={() => handleDeleteLibraryQuestion(q.id)} className="text-slate-500 hover:text-white p-1 rounded-full bg-slate-200 hover:bg-red-500 transition"><DeleteIcon /></button>
+                                                                <button title="Edit question" onClick={() => setEditingLibraryQuestion(q)} className="text-slate-500 hover:text-slate-800 p-1 rounded-full bg-slate-200 hover:bg-slate-300 transition"><EditIcon /></button>
+                                                                <button title="Delete question" onClick={() => handleDeleteLibraryQuestion(q.id)} className="text-slate-500 hover:text-white p-1 rounded-full bg-slate-200 hover:bg-red-500 transition"><DeleteIcon /></button>
                                                             </>
                                                         )}
                                                         <button onClick={() => handleSelectQuestion(q)} disabled={isSelected != null} className="text-sm font-bold text-gl-orange-600 disabled:text-slate-400 disabled:cursor-not-allowed">
@@ -1177,30 +1448,30 @@ const CreateQuizPage = () => {
                         <div className="space-y-4">
                             <div className="flex flex-wrap gap-4">
                                 {(Object.values(QuestionType) as Array<QuestionType>).map(type => (
-                                     <label key={type} className="flex items-center gap-2 text-slate-800">
+                                    <label key={type} className="flex items-center gap-2 text-slate-800">
                                         <input type="radio" value={type} checked={customQuestion.type === type} onChange={() => handleQuestionTypeChange(type)} className="form-radio text-gl-orange-500" /> {type}
                                     </label>
                                 ))}
                             </div>
-                             <textarea value={customQuestion.text} onChange={e => setCustomQuestion(p => ({...p, text: e.target.value}))} placeholder={customQuestion.type === QuestionType.MATCH ? "Instruction Text..." : "Question / Prompt..."} className="w-full bg-slate-100 border border-slate-300 rounded-md p-3 h-24 resize-none focus:ring-2 focus:ring-gl-orange-500 focus:outline-none" />
-                             
-                             {/* MCQ Form */}
-                             {customQuestion.type === QuestionType.MCQ && customQuestion.options.slice(0, 4).map((opt, i) => (
+                            <textarea value={customQuestion.text} onChange={e => setCustomQuestion(p => ({ ...p, text: e.target.value }))} placeholder={customQuestion.type === QuestionType.MATCH ? "Instruction Text..." : "Question / Prompt..."} className="w-full bg-slate-100 border border-slate-300 rounded-md p-3 h-24 resize-none focus:ring-2 focus:ring-gl-orange-500 focus:outline-none" />
+
+                            {/* MCQ Form */}
+                            {customQuestion.type === QuestionType.MCQ && customQuestion.options.slice(0, 4).map((opt, i) => (
                                 <div key={i}>
                                     <div className="flex items-center space-x-2">
-                                        <input type="radio" name="correctAnswer" checked={customQuestion.correctAnswerIndex === i} onChange={() => setCustomQuestion(p => ({...p, correctAnswerIndex: i}))} className="form-radio h-5 w-5 text-gl-orange-600 bg-slate-200 border-slate-400 focus:ring-gl-orange-500"/>
-                                        <input type="text" value={opt} onChange={e => handleOptionChange(i, e.target.value)} placeholder={`Option ${i+1}`} className="w-full bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none"/>
+                                        <input type="radio" name="correctAnswer" checked={customQuestion.correctAnswerIndex === i} onChange={() => setCustomQuestion(p => ({ ...p, correctAnswerIndex: i }))} className="form-radio h-5 w-5 text-gl-orange-600 bg-slate-200 border-slate-400 focus:ring-gl-orange-500" />
+                                        <input type="text" value={opt} onChange={e => handleOptionChange(i, e.target.value)} placeholder={`Option ${i + 1}`} className="w-full bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none" />
                                     </div>
                                 </div>
                             ))}
-                             
-                             {/* Survey Form */}
+
+                            {/* Survey Form */}
                             {customQuestion.type === QuestionType.SURVEY && (
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Options</label>
                                     {customQuestion.options.map((opt, i) => (
                                         <div key={i} className="flex items-center space-x-2 mb-2">
-                                            <input type="text" value={opt} onChange={e => handleOptionChange(i, e.target.value)} placeholder={`Option ${i+1}`} className="w-full bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none"/>
+                                            <input type="text" value={opt} onChange={e => handleOptionChange(i, e.target.value)} placeholder={`Option ${i + 1}`} className="w-full bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none" />
                                             <button onClick={() => handleRemoveOption(i)} className="text-red-500 hover:text-red-700 disabled:opacity-50" disabled={customQuestion.options.length <= 2}>&times;</button>
                                         </div>
                                     ))}
@@ -1208,16 +1479,16 @@ const CreateQuizPage = () => {
                                 </div>
                             )}
 
-                             {/* Match Form */}
+                            {/* Match Form */}
                             {customQuestion.type === QuestionType.MATCH && (
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-2">Matching Pairs (2-6 pairs)</label>
                                     <div className="space-y-3">
                                         {customQuestion.matchPairs.map((pair, i) => (
                                             <div key={i} className="grid grid-cols-10 gap-2 items-center">
-                                                <input type="text" value={pair.prompt} onChange={e => handleMatchPairChange(i, 'prompt', e.target.value)} placeholder={`Prompt ${i+1}`} className="col-span-4 bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none"/>
+                                                <input type="text" value={pair.prompt} onChange={e => handleMatchPairChange(i, 'prompt', e.target.value)} placeholder={`Prompt ${i + 1}`} className="col-span-4 bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none" />
                                                 <span className="text-center text-slate-500 col-span-1">&harr;</span>
-                                                <input type="text" value={pair.correctMatch} onChange={e => handleMatchPairChange(i, 'correctMatch', e.target.value)} placeholder={`Match ${i+1}`} className="col-span-4 bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none"/>
+                                                <input type="text" value={pair.correctMatch} onChange={e => handleMatchPairChange(i, 'correctMatch', e.target.value)} placeholder={`Match ${i + 1}`} className="col-span-4 bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none" />
                                                 <button onClick={() => handleRemovePair(i)} className="text-red-500 hover:text-red-700 disabled:opacity-50 col-span-1" disabled={customQuestion.matchPairs.length <= 2}>&times;</button>
                                             </div>
                                         ))}
@@ -1225,33 +1496,33 @@ const CreateQuizPage = () => {
                                     <button type="button" onClick={handleAddPair} disabled={customQuestion.matchPairs.length >= 6} className="mt-2 text-sm font-semibold text-gl-orange-600 disabled:text-slate-400 hover:text-gl-orange-500">+ Add Pair</button>
                                 </div>
                             )}
-                            
-                             {/* Word Cloud has no specific inputs other than the main text area */}
+
+                            {/* Word Cloud has no specific inputs other than the main text area */}
 
 
-                             <div className="flex flex-col sm:flex-row gap-4">
+                            <div className="flex flex-col sm:flex-row gap-4">
                                 <div className="w-full">
                                     <input type="text" value={customQuestion.technology} onChange={e => {
                                         const value = e.target.value;
-                                        setCustomQuestion(p => ({...p, technology: value}));
+                                        setCustomQuestion(p => ({ ...p, technology: value }));
                                         if (countWords(value) > 2) {
                                             setCustomFormErrors(prev => ({ ...prev, technology: 'Max 2 words allowed' }));
                                         } else {
                                             setCustomFormErrors(prev => ({ ...prev, technology: '' }));
                                         }
-                                    }} placeholder="Technology (e.g., AWS)" className="w-full bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none"/>
+                                    }} placeholder="Technology (e.g., AWS)" className="w-full bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none" />
                                     {customFormErrors.technology && <p className="text-red-500 text-xs mt-1">{customFormErrors.technology}</p>}
                                 </div>
                                 <div className="w-full">
                                     <input type="text" value={customQuestion.skill} onChange={e => {
                                         const value = e.target.value;
-                                        setCustomQuestion(p => ({...p, skill: value}));
+                                        setCustomQuestion(p => ({ ...p, skill: value }));
                                         if (countWords(value) > 2) {
                                             setCustomFormErrors(prev => ({ ...prev, skill: 'Max 2 words allowed' }));
                                         } else {
                                             setCustomFormErrors(prev => ({ ...prev, skill: '' }));
                                         }
-                                    }} placeholder="Skill (e.g., Beginner)" className="w-full bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none"/>
+                                    }} placeholder="Skill (e.g., Beginner)" className="w-full bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none" />
                                     {customFormErrors.skill && <p className="text-red-500 text-xs mt-1">{customFormErrors.skill}</p>}
                                 </div>
                             </div>
@@ -1260,10 +1531,10 @@ const CreateQuizPage = () => {
                             </Button>
                         </div>
                     )}
-                     {view === 'ai' && (
+                    {view === 'ai' && (
                         <div className="space-y-4">
                             <p className="text-slate-500 text-sm">You can generate up to {dailyAiLimit} questions per day. Currently, AI generation only supports Multiple Choice Questions (MCQ).</p>
-                             {isCheckingUsage ? <p className="text-slate-500">Checking usage...</p> : <p className="text-gl-orange-600 font-semibold">Today's usage: {aiUsage}/{dailyAiLimit}</p>}
+                            {isCheckingUsage ? <p className="text-slate-500">Checking usage...</p> : <p className="text-gl-orange-600 font-semibold">Today's usage: {aiUsage}/{dailyAiLimit}</p>}
                             <div>
                                 <input type="text" value={aiTopic} onChange={e => {
                                     const value = e.target.value;
@@ -1276,7 +1547,7 @@ const CreateQuizPage = () => {
                                 }} placeholder="Topic (e.g., React)" className="w-full bg-slate-100 border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none" />
                                 {aiFormErrors.topic && <p className="text-red-500 text-xs mt-1">{aiFormErrors.topic}</p>}
                             </div>
-                             <div>
+                            <div>
                                 <input type="text" value={aiSkill} onChange={e => {
                                     const value = e.target.value;
                                     setAiSkill(value);
@@ -1304,7 +1575,7 @@ const CreateQuizPage = () => {
                                 {isGenerating ? <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div> : 'Generate Questions'}
                             </Button>
                             {aiError && <p className="text-red-500 text-center">{aiError}</p>}
-                             <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2">
+                            <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2">
                                 {generatedQuestions.map((q, index) => (
                                     <div key={index} className="p-3 rounded-lg bg-slate-50 border border-slate-200 animate-fade-in">
                                         <p className="font-semibold text-slate-800">{q.text}</p>
@@ -1317,7 +1588,7 @@ const CreateQuizPage = () => {
                                                 <button onClick={() => setEditingQuestionIndex(index)} disabled={q.status === 'adding' || q.status === 'added'} className="text-sm font-semibold text-slate-600 hover:text-slate-900 disabled:text-slate-400 disabled:cursor-not-allowed">
                                                     Review
                                                 </button>
-                                                <button onClick={() => handleAddFromGenerator(q, index)} disabled={q.status === 'adding' || q.status === 'added'} className="text-sm font-bold text-gl-orange-600 disabled:text-slate-400 disabled:cursor-not-allowed">
+                                                <button onClick={() => notAvailable()} disabled={q.status === 'adding' || q.status === 'added'} className="text-sm font-bold text-gl-orange-600 disabled:text-slate-400 disabled:cursor-not-allowed">
                                                     {q.status === 'added' ? 'Added' : q.status === 'adding' ? 'Adding...' : 'Add to library'}
                                                 </button>
                                             </div>
@@ -1329,12 +1600,12 @@ const CreateQuizPage = () => {
                     )}
                 </Card>
             </div>
-             {editingQuestionIndex !== null && (
+            {editingQuestionIndex !== null && (
                 <EditQuestionModal
                     key={`ai-${editingQuestionIndex}`}
                     question={generatedQuestions[editingQuestionIndex]}
                     onClose={() => setEditingQuestionIndex(null)}
-                    onSave={(data) => handleSaveFromGenerator(data, editingQuestionIndex)}
+                    onSave={notAvailable}
                 />
             )}
             {editingLibraryQuestion && (
@@ -1342,7 +1613,10 @@ const CreateQuizPage = () => {
                     key={editingLibraryQuestion.id}
                     question={editingLibraryQuestion}
                     onClose={() => setEditingLibraryQuestion(null)}
-                    onSave={handleUpdateLibraryQuestion}
+                    // onSave={notAvailable}
+                    onSave={(updatedQuestion) =>
+                        handleUpdateLibraryQuestion(editingLibraryQuestion.id, updatedQuestion)
+                    }
                 />
             )}
         </div>

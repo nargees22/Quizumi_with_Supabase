@@ -1,17 +1,17 @@
 import React from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 
-import { Header } from './src/components/Header';
-import { Footer } from './src/components/Footer';
-import HomePage from './src/pages/HomePage';
-import CreateQuizPage from './src/pages/CreateQuizPage';
-import JoinQuizPage from './src/pages/JoinQuizPage';
-import LobbyPage from './src/pages/LobbyPage';
-import PlayerLobby from './src/pages/PlayerLobby';
-import QuizHostPage from './src/pages/QuizHostPage';
-import QuizPlayerPage from './src/pages/QuizPlayerPage';
-import LeaderboardPage from './src/pages/LeaderboardPage';
-import PerformanceReportPage from './src/pages/PerformanceReportPage';
+import { Header } from './components/Header';
+import { Footer } from './components/Footer';
+import HomePage from './pages/HomePage';
+import CreateQuizPage from './pages/CreateQuizPage';
+import JoinQuizPage from './pages/JoinQuizPage';
+import LobbyPage from './pages/LobbyPage';
+import PlayerLobby from './pages/PlayerLobby';
+import QuizHostPage from './pages/QuizHostPage';
+import QuizPlayerPage from './pages/QuizPlayerPage';
+import LeaderboardPage from './pages/LeaderboardPage';
+import PerformanceReportPage from './pages/PerformanceReportPage';
 
 const App = () => {
   return (
