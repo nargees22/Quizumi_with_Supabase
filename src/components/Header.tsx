@@ -1,4 +1,6 @@
+
 import React from 'react';
+// Fix: Ensure standard react-router-dom Link is correctly referenced
 import { Link } from 'react-router-dom';
 
 export const Header = () => {

@@ -1,6 +1,6 @@
 
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+// Fix: Ensure useParams and useNavigate are correctly imported from react-router-dom
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 // FIX: import firebase to use FieldValue for database operations.

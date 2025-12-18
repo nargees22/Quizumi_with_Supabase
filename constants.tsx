@@ -1,6 +1,6 @@
 
-import type { Question } from './types';
-import { QuestionType } from './types';
+import type { Question } from './types.ts';
+import { QuestionType } from './types.ts';
 
 export const AWS_QUESTION_LIBRARY: Question[] = [
   {

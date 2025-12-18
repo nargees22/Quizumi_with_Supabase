@@ -1,69 +1,62 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { DownArrowIcon } from '../icons/DownArrowIcon';
 
-export const CustomSelect: React.FC<{
-    options: string[];
+interface CustomSelectProps {
     value: string;
     onChange: (value: string) => void;
+    options: string[];
     placeholder: string;
     showPlaceholderOption?: boolean;
-}> = ({ options, value, onChange, placeholder, showPlaceholderOption = true }) => {
+}
+
+// Fix: Corrected component implementation to export CustomSelect as expected by CreateQuizPage
+export const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, placeholder, showPlaceholderOption = true }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (ref.current && !ref.current.contains(event.target as Node)) {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [ref]);
-
-    const handleSelect = (option: string) => {
-        onChange(option);
-        setIsOpen(false);
-    };
+    }, []);
 
     const displayValue = value === 'all' ? placeholder : value;
 
     return (
-        <div className="relative" ref={ref}>
-            <button 
+        <div className="relative" ref={containerRef}>
+            <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full bg-slate-100 border border-slate-300 rounded-md p-2 text-slate-900 focus:ring-2 focus:ring-gl-orange-500 focus:outline-none text-left flex justify-between items-center"
-                aria-haspopup="listbox"
-                aria-expanded={isOpen}
+                className="w-full bg-slate-100 border border-slate-300 rounded-md p-2 text-left flex justify-between items-center focus:ring-2 focus:ring-gl-orange-500 transition-all shadow-sm hover:border-slate-400"
             >
-                <span className="truncate">{displayValue}</span>
-                <svg className={`w-5 h-5 text-slate-500 transition-transform flex-shrink-0 ml-2 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                <span className="truncate text-slate-700 font-medium">{displayValue}</span>
+                <DownArrowIcon className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
             {isOpen && (
-                <div className="absolute top-full left-0 right-0 z-50 mt-1">
-                    <ul role="listbox" className="bg-white border border-slate-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                        {showPlaceholderOption && (
-                            <li 
-                                onClick={() => handleSelect('all')}
-                                className="px-3 py-2 text-slate-700 hover:bg-gl-orange-100 hover:text-gl-orange-800 cursor-pointer"
-                                role="option"
-                                aria-selected={value === 'all'}
-                            >
-                                {placeholder}
-                            </li>
-                        )}
-                        {options.map(option => (
-                            <li 
-                                key={option} 
-                                onClick={() => handleSelect(option)}
-                                className="px-3 py-2 text-slate-700 hover:bg-gl-orange-100 hover:text-gl-orange-800 cursor-pointer overflow-x-auto whitespace-nowrap custom-scrollbar"
-                                role="option"
-                                aria-selected={value === option}
-                            >
-                                {option}
-                            </li>
-                        ))}
-                    </ul>
+                <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-xl max-h-60 overflow-y-auto animate-fade-in custom-scrollbar">
+                    {showPlaceholderOption && (
+                        <button
+                            type="button"
+                            onClick={() => { onChange('all'); setIsOpen(false); }}
+                            className="w-full text-left p-2 hover:bg-slate-100 text-slate-500 text-sm font-medium border-b border-slate-50"
+                        >
+                            {placeholder}
+                        </button>
+                    )}
+                    {options.map(opt => (
+                        <button
+                            key={opt}
+                            type="button"
+                            onClick={() => { onChange(opt); setIsOpen(false); }}
+                            className={`w-full text-left p-2 hover:bg-gl-orange-50 hover:text-gl-orange-700 transition-colors text-sm ${value === opt ? 'bg-gl-orange-50 text-gl-orange-600 font-bold' : 'text-slate-600'}`}
+                        >
+                            {opt}
+                        </button>
+                    ))}
                 </div>
             )}
         </div>

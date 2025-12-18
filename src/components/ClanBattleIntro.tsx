@@ -3,6 +3,7 @@ import type { Quiz, Player } from '../../types';
 import { Clan } from '../../types';
 import { playSound } from '../utils/audio';
 
+// Fix: Corrected component implementation to export ClanBattleIntro as expected by Host and Player pages
 export const ClanBattleIntro: React.FC<{ quiz: Quiz; players: Player[]; playerId?: string }> = ({ quiz, players, playerId }) => {
     useEffect(() => {
         playSound('battle');

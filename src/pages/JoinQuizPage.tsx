@@ -1,13 +1,13 @@
 
-
 import React, { useState, useMemo } from 'react';
+// Fix: Ensure useParams, useLocation, and useNavigate are correctly imported from react-router-dom
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { db } from '../../firebase';
-import type { Player, QuizConfig, Quiz } from '../../types';
-import { Clan } from '../../types';
-import { AVATARS } from '../../avatars';
-import Card from '../components/Card';
-import Button from '../components/Button';
+import { db } from '../../firebase.ts';
+import type { Player, QuizConfig, Quiz } from '../../types.ts';
+import { Clan } from '../../types.ts';
+import { AVATARS } from '../../avatars.ts';
+import Card from '../components/Card.tsx';
+import Button from '../components/Button.tsx';
 
 
 const JoinQuizPage = () => {

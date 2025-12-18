@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+// Fix: Ensure useParams, useNavigate, and Link are correctly imported from react-router-dom
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { db } from '../../firebase';
-import type { Quiz, Player, PlayerAnswer } from '../../types';
-import { QuestionType } from '../../types';
-import { PageLoader } from '../components/PageLoader';
-import { PerformanceReport } from '../components/PerformanceReport';
-import Button from '../components/Button';
-import Card from '../components/Card';
+import { db } from '../../firebase.ts';
+import type { Quiz, Player, PlayerAnswer } from '../../types.ts';
+import { QuestionType } from '../../types.ts';
+import { PageLoader } from '../components/PageLoader.tsx';
+import { PerformanceReport } from '../components/PerformanceReport.tsx';
+import Button from '../components/Button.tsx';
+import Card from '../components/Card.tsx';
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 
 const PerformanceReportPage = () => {
@@ -25,16 +26,16 @@ const PerformanceReportPage = () => {
             return;
         }
 
-        const unsubQuiz = db.collection('quizzes').doc(quizId).onSnapshot(doc => {
+        const unsubQuiz = db.collection('quizzes').doc(quizId).onSnapshot((doc: any) => {
             if (doc.exists) {
                 setQuiz(doc.data() as Quiz);
             } else {
-                navigate('/'); // Quiz not found
+                navigate('/'); 
             }
         });
 
-        const unsubPlayers = db.collection('quizzes').doc(quizId).collection('players').onSnapshot(snap => {
-            const playersData = snap.docs.map(d => d.data() as Player);
+        const unsubPlayers = db.collection('quizzes').doc(quizId).collection('players').onSnapshot((snap: any) => {
+            const playersData = snap.docs.map((d: any) => d.data() as Player);
             setPlayers(playersData);
         });
         
@@ -53,7 +54,6 @@ const PerformanceReportPage = () => {
         
         const scorableQuestions = quiz.questions.filter(q => q.type === QuestionType.MCQ || q.type === QuestionType.MATCH);
 
-        // --- NEW CALCULATIONS for Overall Insights ---
         const totalJoined = players.length;
         const totalParticipated = players.filter(p => p.answers && p.answers.length > 0).length;
         const nonParticipants = players
@@ -64,12 +64,12 @@ const PerformanceReportPage = () => {
         const averageScore = totalJoined > 0 ? totalScoreSum / totalJoined : 0;
         
         const maxPossibleScore = scorableQuestions.reduce((sum, q) => {
-            if (q.type === QuestionType.MCQ) return sum + 2000; // 1000 base + 1000 time bonus
-            if (q.type === QuestionType.MATCH) return sum + 3000; // 2000 base + 1000 time bonus
+            if (q.type === QuestionType.MCQ) return sum + 2000;
+            if (q.type === QuestionType.MATCH) return sum + 3000;
             return sum;
         }, 0);
         
-        const scoreDistribution = [0, 0, 0, 0, 0]; // Buckets: 0-20, 21-40, 41-60, 61-80, 81-100
+        const scoreDistribution = [0, 0, 0, 0, 0];
         if (maxPossibleScore > 0) {
             players.forEach(player => {
                 const percentage = (player.score / maxPossibleScore) * 100;
@@ -80,7 +80,6 @@ const PerformanceReportPage = () => {
                 else scoreDistribution[4]++;
             });
         }
-        // --- END NEW CALCULATIONS ---
 
         players.forEach(player => {
             player.answers.forEach(answer => {
@@ -134,7 +133,7 @@ const PerformanceReportPage = () => {
                         level: getLevel(percentage),
                     };
                 })
-                .sort((a, b) => a.percentage - b.percentage); // Sort by lowest first for areas of improvement
+                .sort((a, b) => a.percentage - b.percentage);
         };
         
         const toughestQuestions = Array.from(questionStats.values())
@@ -177,7 +176,7 @@ const PerformanceReportPage = () => {
             };
         });
 
-        const COMPETENCY_THRESHOLD = 0.7; // 70%
+        const COMPETENCY_THRESHOLD = 0.7;
         const totalScorableQuestions = scorableQuestions.length;
         let competentPlayers = 0;
 
@@ -217,9 +216,7 @@ const PerformanceReportPage = () => {
     }, [quiz, players]);
 
     const isAuthorized = useMemo(() => {
-        if (!quiz) {
-            return false; // Can't determine authorization until quiz data is loaded
-        }
+        if (!quiz) return false;
         return loggedInOrganizer === quiz.organizerName;
     }, [quiz, loggedInOrganizer]);
 
@@ -232,7 +229,7 @@ const PerformanceReportPage = () => {
             const { bySkill, byTechnology, toughestQuestions } = performanceReport;
 
             if (bySkill.length === 0 && byTechnology.length === 0 && toughestQuestions.length === 0) {
-                setRecommendations({ loading: false, text: "Not enough data to generate recommendations. More participants are needed for meaningful insights." });
+                setRecommendations({ loading: false, text: "Not enough data to generate recommendations." });
                 return;
             }
 
@@ -245,7 +242,7 @@ const PerformanceReportPage = () => {
 
                 - For **Strengths**, identify 1-2 topics or skills where participants performed exceptionally well.
                 - For **Weaknesses**, identify 1-2 topics or skills that need the most improvement.
-                - For **Recommendations**, provide 2-3 actionable suggestions for the quiz organizer to address the weaknesses or enhance future quizzes.
+                - For **Recommendations**, provide 2-3 actionable suggestions for the quiz organizer to improve learner outcomes.
 
                 Format the entire response using Markdown with the following headings exactly:
                 **Strengths**
@@ -253,31 +250,25 @@ const PerformanceReportPage = () => {
                 **Recommendations**
 
                 Under each heading, use bullet points starting with '* '.
-                Keep the entire response professional and concise.
 
                 **Performance Data Summary:**
-                *   **Competency Rate:** ${performanceReport.competency.percentage.toFixed(0)}% of participants achieved 70% or more correct answers.
-                *   **Strongest Skills (highest accuracy):** ${topSkills.length > 0 ? topSkills.map(s => `${s.tagName} (${s.percentage.toFixed(0)}%)`).join(', ') : 'N/A'}
-                *   **Strongest Technologies (highest accuracy):** ${topTechs.length > 0 ? topTechs.map(t => `${t.tagName} (${t.percentage.toFixed(0)}%)`).join(', ') : 'N/A'}
-                *   **Skills needing review (lowest accuracy):** ${bySkill.length > 0 ? bySkill.slice(0, 3).map(s => `${s.tagName} (${s.percentage.toFixed(0)}%)`).join(', ') : 'N/A'}
-                *   **Technologies needing review (lowest accuracy):** ${byTechnology.length > 0 ? byTechnology.slice(0, 3).map(t => `${t.tagName} (${t.percentage.toFixed(0)}%)`).join(', ') : 'N/A'}
-                *   **Most difficult questions (by correctness):**
-                    ${toughestQuestions.length > 0 ? toughestQuestions.map(q => `- "${q.text}" (${q.percentage.toFixed(0)}% correct)`).join('\n                    ') : 'N/A'}
-
-                Provide your analysis now.
+                *   **Competency Rate:** ${performanceReport.competency.percentage.toFixed(0)}%
+                *   **Strongest Skills:** ${topSkills.length > 0 ? topSkills.map(s => `${s.tagName} (${s.percentage.toFixed(0)}%)`).join(', ') : 'N/A'}
+                *   **Skills needing review:** ${bySkill.length > 0 ? bySkill.slice(0, 3).map(s => `${s.tagName} (${s.percentage.toFixed(0)}%)`).join(', ') : 'N/A'}
             `;
 
             try {
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+                // Guidelines: Use process.env.API_KEY directly and create instance right before making an API call.
+                // Using gemini-3-pro-preview for complex reasoning tasks (educational analytics).
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 const response: GenerateContentResponse = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
+                    model: 'gemini-3-pro-preview',
                     contents: prompt,
                 });
-                const text = response.text;
-                setRecommendations({ loading: false, text: text });
+                setRecommendations({ loading: false, text: response.text || "" });
             } catch (error) {
                 console.error("Error generating recommendations:", error);
-                setRecommendations({ loading: false, text: "Could not generate AI recommendations. Please check your API key and network connection." });
+                setRecommendations({ loading: false, text: "Could not generate AI recommendations." });
             }
         };
 
@@ -285,20 +276,15 @@ const PerformanceReportPage = () => {
 
     }, [performanceReport, isAuthorized, recommendations.text, quiz]);
 
-    if (!quiz || !players) {
-        return <PageLoader message="Generating performance report..." />;
-    }
+    if (!quiz || !players) return <PageLoader message="Generating performance report..." />;
 
     if (!isAuthorized) {
         return (
             <div className="flex-grow flex flex-col items-center justify-center p-4 text-center">
                 <Card>
                     <h1 className="text-4xl font-bold">Access Denied</h1>
-                    <p className="text-slate-600 text-xl mt-2">This report is only available to the quiz organizer.</p>
-                    <p className="text-slate-500 mt-2">Please log in as an organizer to view this page.</p>
-                    <Link to="/" className="mt-8 inline-block">
-                        <Button className="bg-gl-orange-600 hover:bg-gl-orange-700 w-auto px-6">Go to Home</Button>
-                    </Link>
+                    <p className="text-slate-600 text-xl mt-2">Only the organizer can view this report.</p>
+                    <Link to="/" className="mt-8 inline-block"><Button className="bg-gl-orange-600 hover:bg-gl-orange-700 w-auto px-6">Go to Home</Button></Link>
                 </Card>
             </div>
         );
@@ -311,19 +297,8 @@ const PerformanceReportPage = () => {
                     <h1 className="text-4xl font-bold text-slate-800">Quiz Performance Report</h1>
                     <p className="text-xl text-slate-500 mt-2">{quiz.title}</p>
                 </div>
-                
-                <PerformanceReport 
-                    report={performanceReport} 
-                    quizTitle={quiz.title} 
-                    quizId={quiz.id}
-                    recommendations={recommendations}
-                />
-                
-                <div className="mt-8 flex justify-center">
-                    <Link to="/">
-                        <Button className="bg-gl-orange-600 hover:bg-gl-orange-700 w-auto px-6">Back to Home</Button>
-                    </Link>
-                </div>
+                <PerformanceReport report={performanceReport} quizTitle={quiz.title} quizId={quiz.id} recommendations={recommendations} />
+                <div className="mt-8 flex justify-center"><Link to="/"><Button className="bg-gl-orange-600 hover:bg-gl-orange-700 w-auto px-6">Back to Home</Button></Link></div>
             </div>
         </div>
     );

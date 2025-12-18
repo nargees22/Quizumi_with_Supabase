@@ -1,6 +1,6 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
+// Fix: Ensure useParams and useNavigate are correctly imported from react-router-dom
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import type { Quiz, Player } from '../../types';

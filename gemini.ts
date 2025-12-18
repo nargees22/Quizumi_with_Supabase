@@ -1,12 +1,12 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import type { Question } from './types';
-import { QuestionType } from "./types";
+import type { Question } from './types.ts';
+import { QuestionType } from "./types.ts";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-
-// Define a type for the questions returned by the AI.
+// Fix: Define a type for the questions returned by the AI. This mirrors the schema.
 type AiGeneratedQuestion = Omit<Question, 'id' | 'type' | 'matchPairs' | 'correctAnswers' | 'organizerName' | 'creationTime'>;
 
+// Fix: Define a type for the overall JSON response structure.
 interface AiResponse {
     questions: AiGeneratedQuestion[];
 }
@@ -38,7 +38,13 @@ const schema = {
     required: ['questions']
 };
 
+
 export async function generateQuestions(topic: string, skill: string, count: number): Promise<Omit<Question, 'id'>[]> {
+    // ✅ Create a new GoogleGenAI instance right before making an API call to ensure it always uses the most up-to-date API key.
+    const ai = new GoogleGenAI({
+      apiKey: process.env.API_KEY,
+    });
+
     try {
         const prompt = `Generate ${count} unique, high-quality multiple-choice quiz questions for the topic "${topic}" at a "${skill}" skill level.
 Each question must have exactly 4 options, with one clearly correct answer.
@@ -49,7 +55,8 @@ Assign a time limit of 30 seconds for each question.
 Ensure the questions are distinct and cover different aspects of the topic.`;
         
         const response: GenerateContentResponse = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            // Using gemini-3-pro-preview for complex reasoning tasks like quiz generation
+            model: 'gemini-3-pro-preview',
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -57,7 +64,12 @@ Ensure the questions are distinct and cover different aspects of the topic.`;
             }
         });
 
-        const rawText = response.text || "{}";
+        let rawText = response.text.trim();
+        if (rawText.startsWith("```json")) {
+          rawText = rawText.slice(7, -3).trim();
+        }
+
+        // FIX: Type the parsed JSON to avoid 'unknown' type issues in strict environments.
         const jsonResult = JSON.parse(rawText) as unknown;
         
         let questionsList: AiGeneratedQuestion[] = [];
@@ -71,6 +83,7 @@ Ensure the questions are distinct and cover different aspects of the topic.`;
         }
         
         if (questionsList.length > 0) {
+            // Basic validation to ensure the AI followed instructions
             const validatedQuestions = (questionsList as AiGeneratedQuestion[]).filter((q) => 
                 q.text && Array.isArray(q.options) && q.options.length === 4 &&
                 typeof q.correctAnswerIndex === 'number' && q.correctAnswerIndex >= 0 && q.correctAnswerIndex < 4

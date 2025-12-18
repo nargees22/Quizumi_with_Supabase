@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Quiz, Player, Question, PlayerAnswer } from '../../types';
-import { QuestionType, GameState } from '../../types';
-import Button from './Button';
-import Card from './Card';
-import { FiftyFiftyIcon } from '../icons/FiftyFiftyIcon';
-import { PointDoublerIcon } from '../icons/PointDoublerIcon';
-import { MemoizedPlayerConsole } from './PlayerConsole';
+import type { Quiz, Player, Question, PlayerAnswer } from '../../types.ts';
+import { QuestionType, GameState } from '../../types.ts';
+import Button from './Button.tsx';
+import Card from './Card.tsx';
+import { FiftyFiftyIcon } from '../icons/FiftyFiftyIcon.tsx';
+import { PointDoublerIcon } from '../icons/PointDoublerIcon.tsx';
+import { MemoizedPlayerConsole } from './PlayerConsole.tsx';
 
 interface PlayerQuestionActiveProps {
     quiz: Quiz;

@@ -1,9 +1,13 @@
 import React, { useEffect } from 'react';
-import type { Question } from '../../types';
-import { QuestionType } from '../../types';
-import { CheckIcon } from '../icons/CheckIcon';
-import { XIcon } from '../icons/XIcon';
-import { PointDoublerIcon } from '../icons/PointDoublerIcon';
+import type { Question } from '../../types.ts';
+import { QuestionType } from '../../types.ts';
+// import type { Question } from '../constants';
+// import { QuestionType } from '../constants';
+
+
+import { CheckIcon } from '../icons/CheckIcon.tsx';
+import { XIcon } from '../icons/XIcon.tsx';
+import { PointDoublerIcon } from '../icons/PointDoublerIcon.tsx';
 
 const LifelineAward: React.FC<{ type: 'pointDoubler'; onClose: () => void }> = ({ type, onClose }) => {
     useEffect(() => {

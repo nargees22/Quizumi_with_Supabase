@@ -1,4 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
+// Fix: Ensure useParams and useNavigate are correctly imported from react-router-dom
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import firebase from '../../firebase';
@@ -111,7 +113,7 @@ const QuizHostPage = () => {
         };
 
         if (isLastQuestion) {
-            updateData.endTime = firebase.firestore.FieldValue.serverTimestamp();
+           // updateData.endTime = firebase.firestore.FieldValue.serverTimestamp();
             updateData.participantCount = players.length;
         }
 

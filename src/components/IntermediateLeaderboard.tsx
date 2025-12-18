@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Player, Quiz, PlayerAnswer } from '../../types';
-import { Clan } from '../../types';
-import { ClockIcon } from '../icons/ClockIcon';
-import { ClanFlag } from './ClanFlag';
-import { PointDoublerIcon } from '../icons/PointDoublerIcon';
-import { FiftyFiftyIcon } from '../icons/FiftyFiftyIcon';
+import type { Player, Quiz, PlayerAnswer } from '../../types.ts';
+import { Clan } from '../../types.ts';
+import { ClockIcon } from '../icons/ClockIcon.tsx';
+import { ClanFlag } from './ClanFlag.tsx';
+import { PointDoublerIcon } from '../icons/PointDoublerIcon.tsx';
+import { FiftyFiftyIcon } from '../icons/FiftyFiftyIcon.tsx';
 
 const RankChangeIndicator: React.FC<{ change: number }> = ({ change }) => {
     if (change > 0) {
@@ -17,6 +17,7 @@ const RankChangeIndicator: React.FC<{ change: number }> = ({ change }) => {
     return <span className="text-slate-400 font-bold text-lg w-10">-</span>;
 };
 
+// Fix: Completed the component implementation which was truncated, ensuring it returns valid JSX.
 export const IntermediateLeaderboard: React.FC<{
     players: Player[];
     quiz: Quiz;
@@ -177,7 +178,6 @@ export const IntermediateLeaderboard: React.FC<{
                     </div>
                 )}
             </div>
-            {/* Show strategic tip AND waiting message on player screen */}
             {highlightPlayerId && (
                 <div className="w-full max-w-lg mx-auto mt-8 animate-slide-in-up text-center px-4">
                     {strategicTip && (

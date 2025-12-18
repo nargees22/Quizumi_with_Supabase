@@ -17,6 +17,8 @@ export interface MatchPair {
 
 export interface Question {
   id: string;
+  // Fix: Add db_pk_id to Question interface to store the database primary key for update/delete operations
+  db_pk_id?: number;
   text: string;
   options: string[];
   correctAnswerIndex?: number; // For MCQ
