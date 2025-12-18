@@ -24,6 +24,8 @@ const PerformanceReportPage = () => {
             return;
         }
 
+        
+
         const unsubQuiz = db.collection('quizzes').doc(quizId).onSnapshot(doc => {
             if (doc.exists) {
                 setQuiz(doc.data() as Quiz);
