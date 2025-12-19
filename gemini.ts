@@ -69,8 +69,8 @@ Ensure the questions are distinct and cover different aspects of the topic.`;
           rawText = rawText.slice(7, -3).trim();
         }
 
-        // FIX: Type the parsed JSON to avoid 'unknown' type issues in strict environments.
-        const jsonResult = JSON.parse(rawText) as unknown;
+        // FIX: Changed 'as unknown' to 'as any' to prevent 'unknown' type issues in consuming components like CreateQuizPage.
+        const jsonResult = JSON.parse(rawText) as any;
         
         let questionsList: AiGeneratedQuestion[] = [];
 
