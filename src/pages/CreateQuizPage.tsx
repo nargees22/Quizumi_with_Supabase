@@ -208,22 +208,43 @@ const CreateQuizPage = () => {
 
 
                 if (data.length > 0) {
-                    const techMap = new Map<string, string>();
-                    const skillMap = new Map<string, string>();
+                    // const techMap = new Map<string, string>();
+                    // const skillMap = new Map<string, string>();
 
-                    data.forEach(q => {
-                        if (q.technology?.trim()) {
-                            techMap.set(q.technology.toLowerCase(), q.technology.trim());
-                        }
-                        if (q.skill?.trim()) {
-                            skillMap.set(q.skill.toLowerCase(), q.skill.trim());
-                        }
-                    });
+                    // data.forEach(q => {
+                    //     if (q.technology?.trim()) {
+                    //         techMap.set(q.technology.toLowerCase(), q.technology.trim());
+                    //     }
+                    //     if (q.skill?.trim()) {
+                    //         skillMap.set(q.skill.toLowerCase(), q.skill.trim());
+                    //     }
+                    // });
 
-                    setTechnologies(Array.from(techMap.values()).sort());
-                    const sortedSkills = Array.from(skillMap.values()).sort();
-                    setMasterSkills(sortedSkills);
-                    setSkillsForFilter(sortedSkills);
+                    // setTechnologies(Array.from(techMap.values()).sort());
+                    // const sortedSkills = Array.from(skillMap.values()).sort();
+                    // setMasterSkills(sortedSkills);
+                    // setSkillsForFilter(sortedSkills);
+//                     const techSet = new Set<string>();
+// const skillSet = new Set<string>();
+
+// data.forEach(q => {
+//   if (q.technology?.trim()) {
+//     techSet.add(q.technology.trim());
+//   }
+//   if (q.skill?.trim()) {
+//     skillSet.add(q.skill.trim());
+//   }
+// });
+
+// const sortedTechnologies = Array.from(techSet).sort();
+// const sortedSkills = Array.from(skillSet).sort();
+
+// setTechnologies(sortedTechnologies);
+// setMasterSkills(sortedSkills);
+// setSkillsForFilter(sortedSkills);
+setLibraryQuestions(mappedQuestions);
+
+
                 }
 
             } catch (error) {
@@ -311,6 +332,17 @@ const CreateQuizPage = () => {
         }
         setSelectedSkill('all');
     }, [selectedTechnology, libraryQuestions, masterSkills]);
+useEffect(() => {
+  const techSet = new Set<string>();
+
+  libraryQuestions.forEach(q => {
+    if (q.technology && q.technology.trim()) {
+      techSet.add(q.technology.trim());
+    }
+  });
+
+  setTechnologies(Array.from(techSet).sort());
+}, [libraryQuestions]);
 
     const filteredQuestions = useMemo(() => {
         const sourceQuestions = libraryView === 'mine'
